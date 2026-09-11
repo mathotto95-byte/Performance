@@ -14,7 +14,8 @@ st.set_page_config(page_title="Performance RW", page_icon=str(LOGO_PATH), layout
 apply_theme()
 logo, titulo, atualizar = st.columns([1.2, 4, 1])
 with logo:
-    st.image(str(LOGO_PATH), width=180)
+    with st.container(key="rw-logo"):
+        st.image(str(LOGO_PATH), width=180)
 with titulo:
     st.title("Performance RW")
 with atualizar:

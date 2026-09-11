@@ -39,6 +39,13 @@ def apply_theme() -> None:
         [data-testid="stSidebar"] * {
             color: var(--rw-text) !important;
         }
+        .stApp h1, .stApp h1 *,
+        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h1 * {
+            color: #f4c95d !important;
+        }
+        .st-key-rw-logo img {
+            filter: brightness(2.6) saturate(1.1);
+        }
 
         div[data-testid="stMetric"] {
             background: var(--rw-navy);
