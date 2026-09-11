@@ -22,7 +22,7 @@ def apply_theme() -> None:
             color: var(--rw-text) !important;
         }
         .block-container {
-            padding-top: 1.1rem;
+            padding-top: 4.5rem;
             max-width: 1550px;
         }
         h1, h2, h3, label, p, span, div {
