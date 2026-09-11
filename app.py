@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -7,18 +8,22 @@ from core import FONTES, carregar, exportar, historico, ler_planilha, salvar
 from theme import apply_theme
 
 
-st.set_page_config(page_title="Regras Estadia", page_icon="📋", layout="wide")
+LOGO_PATH = Path(__file__).resolve().parent / "assets" / "rodo_wall_logo.png"
+
+st.set_page_config(page_title="Performance RW", page_icon=str(LOGO_PATH), layout="wide")
 apply_theme()
-titulo, atualizar = st.columns([5, 1])
+logo, titulo, atualizar = st.columns([1.2, 4, 1])
+with logo:
+    st.image(str(LOGO_PATH), width=180)
 with titulo:
-    st.title("REGRAS ESTADIA")
+    st.title("Performance RW")
 with atualizar:
     st.write("")
     if st.button("Atualizar página", use_container_width=True):
         st.rerun()
 st.caption("Importação e consulta dos resultados de OTS/OTD e Estadia.")
 
-st.sidebar.title("REGRAS ESTADIA")
+st.sidebar.title("Performance RW")
 st.sidebar.caption("Gestão operacional • RW")
 pagina = st.sidebar.radio("Menu", ["Visão geral", "Importações", "Consultar resultados", "Histórico"])
 st.sidebar.divider()
