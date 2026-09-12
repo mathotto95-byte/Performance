@@ -34,4 +34,27 @@ Cada importação é uma versão completa, preservada no banco SQLite próprio e
 
 As colunas de origem são preservadas. A aba sugerida para OTS/OTD é `ots_otd`; para Estadia, `resultado_completo`, `resultado` ou `completo`, quando disponível. A seleção pode ser ajustada na tela.
 
-Esta primeira etapa contempla importação e consulta. Chaves de relacionamento, validações de negócio, franquias e cálculos ainda dependem da definição das regras. Não há cruzamento automático ou cálculo de cobrança nesta versão. O aplicativo é local e ainda não possui autenticação.
+Esta primeira etapa contempla importação e consulta. Chaves de relacionamento, validações de negócio, franquias e cálculos ainda dependem da definição das regras. Não há cruzamento automático ou cálculo de cobrança nesta versão.
+
+## Login
+
+O acesso exige usuário ou e-mail e senha, no mesmo formato de Secrets do Controle Integrado. Configure em Settings > Secrets do aplicativo Performance no Streamlit:
+
+```toml
+[auth.admin]
+username = "admin"
+name = "Administrador"
+email = "admin@empresa.com"
+password = "SUBSTITUA_POR_SUA_SENHA"
+role = "ADMIN"
+
+[auth.users.operador]
+username = "operador"
+name = "Operador"
+password = "SUBSTITUA_POR_OUTRA_SENHA"
+role = "OPERACIONAL"
+```
+
+Também aceita `password_hash` no formato PBKDF2-SHA256 ou bcrypt, e as variáveis `AUTH_ADMIN_PASSWORD` / `AUTH_USERS_JSON` do Controle Integrado. Não existe senha padrão. Credenciais e usuários do banco do Controle Integrado não são copiados automaticamente; configure os acessos neste aplicativo. Não publique senhas no GitHub.
+
+ADMIN e OPERACIONAL podem importar. CONSULTA acessa visualização, histórico e exportação. Há bloqueio de cinco minutos após cinco falhas na sessão, expiração após 60 minutos de inatividade (verificada na próxima interação), botão Sair e registro de eventos de acesso no banco próprio. O bloqueio de tentativas segue o Controle Integrado e é limitado à sessão do navegador.

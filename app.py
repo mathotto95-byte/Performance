@@ -6,12 +6,15 @@ import streamlit as st
 
 from core import FONTES, carregar, exportar, historico, ler_planilha, salvar
 from theme import apply_theme
+from auth import enforce_authentication, current_user, logout
 
 
 LOGO_PATH = Path(__file__).resolve().parent / "assets" / "rodo_wall_logo.png"
 
 st.set_page_config(page_title="Performance RW", page_icon=str(LOGO_PATH), layout="wide")
 apply_theme()
+if not enforce_authentication():
+    st.stop()
 logo, titulo, atualizar = st.columns([1.2, 4, 1])
 with logo:
     with st.container(key="rw-logo"):
@@ -26,7 +29,15 @@ st.caption("Importação e consulta dos resultados de OTS/OTD e Estadia.")
 
 st.sidebar.title("Performance RW")
 st.sidebar.caption("Gestão operacional • RW")
-pagina = st.sidebar.radio("Menu", ["Visão geral", "Importações", "Consultar resultados", "Histórico"])
+usuario = current_user()
+st.sidebar.write(f"**Usuário:** {usuario['name']}")
+st.sidebar.write(f"**Perfil:** {usuario['role'].title()}")
+menu = ["Visão geral", "Consultar resultados", "Histórico"]
+if usuario['role'] in {"ADMIN", "OPERACIONAL"}:
+    menu.insert(1, "Importações")
+pagina = st.sidebar.radio("Menu", menu)
+if st.sidebar.button("Sair", use_container_width=True):
+    logout()
 st.sidebar.divider()
 st.sidebar.caption("Bases: OTS e OTD / Estadia")
 st.divider()
