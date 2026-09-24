@@ -2,6 +2,7 @@
 import hashlib
 import json
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -12,6 +13,7 @@ FONTES = ("Resultados da OTS e OTD", "Resultados Estadia")
 DB_PATH = Path(__file__).resolve().parent / "data" / "regras_estadia.sqlite3"
 
 
+@contextmanager
 def conectar(path=DB_PATH):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -22,7 +24,11 @@ def conectar(path=DB_PATH):
         quantidade INTEGER NOT NULL, dados TEXT NOT NULL,
         UNIQUE(fonte, assinatura))""")
     conn.commit()
-    return conn
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 
 def ler_planilha(content, aba, cabecalho=1):

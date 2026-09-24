@@ -14,6 +14,22 @@ Segue a identidade visual dos sistemas OTS/OTD e Estadias: fundo escuro, menu az
 
 O tema fica em `.streamlit/config.toml` e `theme.py`.
 
+## Sincronização do Banco OTS e OTD
+
+Em Secrets do **Performance**, acrescente uma seção independente (mantenha os blocos de login):
+
+```toml
+[ots_sync]
+token = "SEU_TOKEN_GITHUB_COM_LEITURA_DO_OTSeOTD"
+branch = "main"
+```
+
+O token precisa de Contents: Read no repositório `mathotto95-byte/OTSeOTD`. Também aceita `GITHUB_TOKEN` na raiz dos Secrets ou `[github].token`, caso já configurado. Não coloque tokens neste repositório.
+
+No menu **Sincronização OTS e OTD**, clique em **Sincronizar resultados**. A origem é `backups/ots_otd_latest.json`, publicado pelo aplicativo `https://ontimeshipdev.streamlit.app/`. A tela informa a data do backup e da sincronização. ADMIN e OPERACIONAL podem sincronizar; CONSULTA pode consultar os resultados recebidos.
+
+Os dados reproduzem as onze colunas do **Banco OTS e OTD**, incluindo registros originais e alterações, sem limite de 500 linhas. A sincronização é manual e recebe a última versão publicada no GitHub, não lê diretamente a sessão do Streamlit nem o banco Supabase. Atualize o backup no sistema de origem para disponibilizar mudanças recentes. Backups inválidos ou vazios não substituem a base atual; versões anteriores ficam no histórico. NSDocs, LCTE e Estadias ainda não têm sincronização implementada.
+
 ## Executar
 
 Na pasta deste sistema:

@@ -7,6 +7,7 @@ import streamlit as st
 from core import FONTES, carregar, exportar, historico, ler_planilha, salvar
 from theme import apply_theme
 from auth import enforce_authentication, current_user, logout
+from ots_sync import settings as ots_settings, sync as sync_ots, status as ots_status
 
 
 LOGO_PATH = Path(__file__).resolve().parent / "assets" / "rodo_wall_logo.png"
@@ -35,6 +36,7 @@ st.sidebar.write(f"**Perfil:** {usuario['role'].title()}")
 menu = ["Visão geral", "Consultar resultados", "Histórico"]
 if usuario['role'] in {"ADMIN", "OPERACIONAL"}:
     menu.insert(1, "Importações")
+    menu.insert(1, "Sincronização OTS e OTD")
 pagina = st.sidebar.radio("Menu", menu)
 if st.sidebar.button("Sair", use_container_width=True):
     logout()
@@ -43,9 +45,34 @@ st.sidebar.caption("Bases: OTS e OTD / Estadia")
 st.divider()
 hist = historico()
 
-if pagina == "Visão geral":
+if pagina == "Sincronização OTS e OTD":
+    st.subheader("Banco OTS e OTD")
+    st.caption("Origem: ontimeshipdev.streamlit.app • mathotto95-byte/OTSeOTD")
+    st.info("Recebe o último backup publicado no GitHub, com todos os registros e alterações. Para incluir mudanças recentes, use Enviar backup para GitHub no OTS/OTD antes de sincronizar.")
+    config = ots_settings()
+    if not config["token"]:
+        st.warning("Para repositório privado, configure ots_sync.token nos Secrets do Performance com acesso de leitura ao OTSeOTD.")
+    if st.button("Sincronizar resultados", type="primary"):
+        try:
+            with st.spinner("Recebendo Banco OTS e OTD…"):
+                total, changed = sync_ots(**config)
+            st.success(f"{total:,} registros recebidos." if changed else f"Base conferida: {total:,} registros, sem alterações.")
+        except ValueError as exc:
+            st.error(str(exc))
+    estado = ots_status()
+    if estado:
+        st.write(f"Backup da origem: {estado[1]}")
+        st.caption(f"Última sincronização (UTC): {estado[2]}")
+        resultado = carregar(estado[0])
+        st.dataframe(resultado, hide_index=True, use_container_width=True)
+        st.download_button("Exportar Banco OTS e OTD", exportar(resultado), "banco_ots_otd.xlsx")
+
+elif pagina == "Visão geral":
     for col, fonte in zip(st.columns(2), FONTES):
         base = hist[hist.fonte == fonte]
+        estado = ots_status() if fonte == FONTES[0] else None
+        if estado:
+            base = hist[hist.id == estado[0]]
         with col:
             st.subheader(fonte)
             st.metric("Registros na última importação", int(base.iloc[0].quantidade) if not base.empty else 0)
@@ -87,6 +114,9 @@ elif pagina == "Consultar resultados":
         st.info("Nenhuma importação disponível para esta base.")
     else:
         opcoes = {int(row.id): f"#{row.id} • {row.criado_em} • {row.arquivo} • {row.aba}" for row in base.itertuples()}
+        estado = ots_status() if fonte == FONTES[0] else None
+        if estado and estado[0] in opcoes:
+            opcoes = {estado[0]: opcoes[estado[0]] + " • Última sincronização", **{k: v for k, v in opcoes.items() if k != estado[0]}}
         selecionada = st.selectbox("Versão importada", list(opcoes), format_func=opcoes.get)
         df = carregar(selecionada)
         busca = st.text_input("Buscar nos resultados")
