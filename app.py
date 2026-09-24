@@ -6,6 +6,7 @@ import streamlit as st
 
 from core import FONTES, carregar, exportar, historico, ler_planilha, salvar
 from theme import apply_theme
+from rw_theme import apply_theme as apply_rw_theme, render_brand_header, render_sidebar_logo
 from auth import enforce_authentication, current_user, logout
 from ots_sync import settings as ots_settings, sync as sync_ots, status as ots_status
 
@@ -14,20 +15,18 @@ LOGO_PATH = Path(__file__).resolve().parent / "assets" / "rodo_wall_logo.png"
 
 st.set_page_config(page_title="Performance RW", page_icon=str(LOGO_PATH), layout="wide")
 apply_theme()
+apply_rw_theme(LOGO_PATH)
 if not enforce_authentication():
     st.stop()
-logo, titulo, atualizar = st.columns([1.2, 4, 1])
-with logo:
-    with st.container(key="rw-logo"):
-        st.image(str(LOGO_PATH), width=180)
+titulo, atualizar = st.columns([4, 1])
 with titulo:
-    st.title("Performance RW")
+    render_brand_header("Performance RW", "Importação e consulta dos resultados de OTS/OTD e Estadia.")
 with atualizar:
     st.write("")
     if st.button("Atualizar página", use_container_width=True):
         st.rerun()
-st.caption("Importação e consulta dos resultados de OTS/OTD e Estadia.")
 
+render_sidebar_logo()
 st.sidebar.title("Performance RW")
 st.sidebar.caption("Gestão operacional • RW")
 usuario = current_user()

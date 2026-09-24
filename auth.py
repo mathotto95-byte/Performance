@@ -10,6 +10,7 @@ from typing import Any, Mapping
 import streamlit as st
 
 from core import conectar
+from rw_theme import render_login_header
 
 APP_NAME = "Performance RW"
 
@@ -125,7 +126,7 @@ def logout(reason: str='logout') -> None:
     st.rerun()
 
 def render_login_page() -> None:
-    st.title(APP_NAME)
+    render_login_header(APP_NAME)
     st.subheader('Login')
     st.caption('Informe seu usuario e senha para acessar o sistema.')
     if not admin_is_configured(st.secrets):
