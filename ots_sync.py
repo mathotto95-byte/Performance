@@ -77,22 +77,30 @@ def download_payload(token, branch="main", repository=REPOSITORY, backup_path=BA
 
 def sync(token, branch="main", path=DB_PATH, fonte=FONTES[0]):
     if fonte == FONTES[1]:
-        from rules import estadias_payload
+        from rules import estadias_payload, lcte_from_estadias
         repository, backup = "mathotto95-byte/Estadias", "backups/estadias_latest.json"
         payload = download_payload(token, branch, repository, backup)
         view = estadias_payload(payload)
+        lcte = lcte_from_estadias(payload)
     else:
         repository, backup = REPOSITORY, BACKUP_PATH
         payload = download_payload(token, branch)
         view = parse_payload(payload)
-    changed = salvar(fonte, f"{repository}/{backup}", fonte, view, path)
+    changed = _save_snapshot(fonte, f"{repository}/{backup}", view, payload.get("generated_at", ""), path)
+    if fonte == FONTES[1] and not lcte.empty:
+        _save_snapshot(FONTES[2], f"{repository}/{backup}", lcte, payload.get("generated_at", ""), path)
+    return len(view), changed
+
+
+def _save_snapshot(fonte, arquivo, view, generated_at, path):
+    changed = salvar(fonte, arquivo, fonte, view, path)
     # Uma base A → B → A precisa apontar novamente para A, mesmo sem duplicar o conteúdo.
     serialized = view.to_json(orient="split", date_format="iso", force_ascii=False)
     with conectar(path) as conn:
         row = conn.execute("SELECT id FROM importacoes WHERE fonte=? AND dados=?", (fonte, serialized)).fetchone()
         conn.execute("CREATE TABLE IF NOT EXISTS sincronizacoes (fonte TEXT PRIMARY KEY, importacao_id INTEGER, gerado_em TEXT, sincronizado_em TEXT)")
-        conn.execute("INSERT OR REPLACE INTO sincronizacoes VALUES (?,?,?,?)", (fonte, row[0], payload.get("generated_at", ""), datetime.now(timezone.utc).isoformat(timespec="seconds")))
-    return len(view), changed
+        conn.execute("INSERT OR REPLACE INTO sincronizacoes VALUES (?,?,?,?)", (fonte, row[0], generated_at, datetime.now(timezone.utc).isoformat(timespec="seconds")))
+    return changed
 
 
 def status(path=DB_PATH, fonte=FONTES[0]):

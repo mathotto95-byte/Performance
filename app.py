@@ -8,14 +8,17 @@ import streamlit as st
 from core import FONTES, carregar, exportar, historico, ler_planilha, salvar
 from theme import apply_theme
 from auth import enforce_authentication, current_user, logout
-from ots_sync import settings as ots_settings, sync as sync_ots, status as ots_status
+import ots_sync
 import rules
+from importlib import reload
 
 # Streamlit pode manter o módulo anterior em memória durante a atualização.
-if not hasattr(rules, "indicators"):
-    from importlib import reload
+if not hasattr(rules, "indicators") or not hasattr(rules, "lcte_from_estadias"):
     reload(rules)
+if not hasattr(ots_sync, "_save_snapshot"):
+    reload(ots_sync)
 
+from ots_sync import settings as ots_settings, sync as sync_ots, status as ots_status
 from rules import analyze, prepare_lcte, indicators
 from reporting import control_panel, render_panel, publish
 
@@ -82,7 +85,7 @@ if pagina in {"Análise Performance", "Painel de Controle"}:
         sources[fonte] = {"id": selected, "arquivo": metadata.arquivo, "importado_em": metadata.criado_em,
                           "assinatura": hashlib.sha256(bases[fonte].to_json(orient="split", date_format="iso").encode()).hexdigest()}
     if bases[FONTES[2]].empty:
-        st.info("Para exibir os indicadores e os resultados por NF, acesse Importações, selecione LCTE / Observação e importe a planilha com as notas, placas e monitoramentos. Depois retorne a esta tela.")
+        st.info("Acesse Sincronização Estadias e clique em Sincronizar Estadias: o LCTE e a Observação serão recebidos junto com os resultados. Se o backup ainda não incluir a planilha, envie um novo backup completo no Estadias. A importação manual permanece disponível como alternativa.")
     else:
         try:
             resultado = analyze(bases[FONTES[2]], bases[FONTES[0]], bases[FONTES[1]])
@@ -126,7 +129,7 @@ if pagina in {"Análise Performance", "Painel de Controle"}:
 
 elif pagina == "Sincronização Estadias":
     st.subheader("Resultados do Estadias")
-    st.caption("Recebe os resultados já calculados de mathotto95-byte/Estadias; não recalcula o rastreador.")
+    st.caption("Recebe os resultados e o LCTE com Observação já importado no Estadias. Não é necessário importar a mesma planilha novamente.")
     config = ots_settings()
     try:
         config["token"] = st.secrets.get("estadias_sync", {}).get("token") or config["token"]
@@ -139,6 +142,11 @@ elif pagina == "Sincronização Estadias":
             with st.spinner("Recebendo resultados…"):
                 total, changed = sync_ots(**config, fonte=FONTES[1])
             st.success(f"Base conferida: {total:,} registros.")
+            lcte_state = ots_status(fonte=FONTES[2])
+            if lcte_state:
+                st.success(f"LCTE / Observação disponível: {len(carregar(lcte_state[0])):,} registros. Abra Análise Performance.")
+            else:
+                st.warning("Este backup não contém LCTE. No Estadias, envie um backup completo com as importações e sincronize novamente.")
         except ValueError as exc:
             st.error(str(exc))
     estado = ots_status(fonte=FONTES[1])

@@ -1,5 +1,6 @@
 """Cruzamento por NF/placa, com monitoramento como ponte para os prazos."""
 import re
+import json
 import unicodedata
 
 import pandas as pd
@@ -84,6 +85,31 @@ def estadias_payload(payload):
         if {"lcte_id", "analise_enviada_em"}.issubset(marks.columns) and not marks.lcte_id.duplicated().any():
             df["analise_enviada_em"] = df.lcte_id.map(marks.set_index("lcte_id").analise_enviada_em)
     return df
+
+
+def lcte_from_estadias(payload):
+    section = payload.get("imports", payload)
+    if not isinstance(section, dict) or not isinstance(section.get("tables", {}), dict):
+        raise ValueError("Backup de importações do Estadias inválido.")
+    rows = section.get("tables", {}).get("mod_estadias_lcte_normalizada", [])
+    if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+        raise ValueError("LCTE do Estadias inválido; importação anterior preservada.")
+    result = []
+    for row in rows:
+        try:
+            original = json.loads(row.get("dados_json") or "{}")
+        except (ValueError, TypeError):
+            original = {}
+        original = {label(k): text(v) for k, v in original.items()} if isinstance(original, dict) else {}
+        result.append({
+            "Notas fiscais": original.get("notas fiscais") or text(row.get("nf")),
+            "Placa tração": original.get("placa tracao") or text(row.get("placa_norm")) or text(row.get("placa")),
+            "Observação": original.get("observacao") or original.get("obs") or original.get("comentario") or text(row.get("monitoramento")) or text(row.get("observacao")),
+            "Data Emissão NF": original.get("data emissao nf", ""),
+            "Município do remetente": original.get("municipio do remetente") or text(row.get("origem")),
+            "Município do destinatário": original.get("municipio do destinatario") or text(row.get("destino")),
+        })
+    return pd.DataFrame(result)
 
 
 def analyze(lcte, ots, estadias):

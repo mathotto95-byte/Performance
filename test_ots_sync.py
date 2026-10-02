@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,6 +15,35 @@ def payload(code="001"):
 
 
 class SyncTests(unittest.TestCase):
+    def test_estadias_imports_lcte_without_reupload(self):
+        row = {"nf": "1", "placa_norm": "ABC1D23", "chegada_origem": "", "chegada_destino": ""}
+        imported = {**row, "observacao": "texto sem codigo", "data_emissao": "2026-10-01",
+                    "dados_json": json.dumps({"Observação": "MON 1234567", "Data Emissão NF": "30/09/2026"})}
+        source = {"results": {"tables": {"mod_estadias_cruzamento_inicial": [row]}},
+                  "imports": {"tables": {"mod_estadias_lcte_normalizada": [imported]}}, "generated_at": "2026-10-02"}
+        with tempfile.TemporaryDirectory() as directory:
+            db = Path(directory) / "test.sqlite3"
+            with patch("ots_sync.download_payload", return_value=source):
+                sync("token", path=db, fonte="Resultados Estadia")
+                first = status(db, fonte="LCTE / Observação")[0]
+                view = carregar(first, db)
+                self.assertEqual(view.iloc[0]["Observação"], "MON 1234567")
+                self.assertEqual(view.iloc[0]["Data Emissão NF"], "30/09/2026")
+                from rules import prepare_lcte
+                self.assertEqual(prepare_lcte(view).iloc[0]["Monitoramento"], "1234567")
+                sync("token", path=db, fonte="Resultados Estadia")
+                self.assertEqual(len(historico(db)), 2)
+                imported["dados_json"] = "{}"
+                imported["monitoramento"] = "7654321"
+                sync("token", path=db, fonte="Resultados Estadia")
+                view = carregar(status(db, fonte="LCTE / Observação")[0], db)
+                self.assertEqual(view.iloc[0]["Observação"], "7654321")
+                self.assertEqual(view.iloc[0]["Data Emissão NF"], "")
+                del source["imports"]
+                sync("token", path=db, fonte="Resultados Estadia")
+                self.assertEqual(len(historico(db)), 3)
+                self.assertEqual(carregar(status(db, fonte="LCTE / Observação")[0], db).iloc[0]["Observação"], "7654321")
+
     def test_estadias_uses_existing_storage(self):
         row = {"nf": "1", "placa_norm": "ABC1D23", "chegada_origem": "", "chegada_destino": ""}
         source = {"results": {"tables": {"mod_estadias_cruzamento_inicial": [row]}}, "generated_at": "2026-10-02"}

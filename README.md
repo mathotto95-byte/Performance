@@ -32,8 +32,8 @@ Os dados reproduzem as onze colunas do **Banco OTS e OTD**, incluindo registros 
 
 ## Testar a análise Performance
 
-1. Em **Importações**, selecione **LCTE / Observação** e importe o Excel com Notas fiscais, Placa tração, Observação e Data Emissão NF.
-2. Sincronize OTS/OTD e **Estadias** pelos menus correspondentes. O token existente precisa ter leitura também no repositório `mathotto95-byte/Estadias`. Alternativamente, configure `[estadias_sync]` com `token = "SEU_TOKEN"`.
+1. Sincronize OTS/OTD e **Estadias** pelos menus correspondentes. O token existente precisa ter leitura também no repositório `mathotto95-byte/Estadias`. Alternativamente, configure `[estadias_sync]` com `token = "SEU_TOKEN"`.
+2. A sincronização Estadias recebe também o **LCTE / Observação** do backup completo existente, sem reenviar a planilha. Reutiliza a Observação original e o monitoramento já armazenados. Caso o backup só contenha resultados, publique um backup completo no Estadias e sincronize novamente; a importação manual em **Importações → LCTE / Observação** continua disponível.
 3. Abra **Análise Performance**, confira as versões das três bases e exporte a análise se necessário.
 
 A extração usa números isolados de sete dígitos na Observação. Múltiplos códigos ou associações conflitantes ficam sem classificação. Monitoramento liga os agendamentos; NF + placa liga as chegadas já calculadas no Estadias. Os backups simples e completos do Estadias são aceitos. A análise não recalcula rastreador nem altera bancos de origem. NSDocs ainda não está integrado.
