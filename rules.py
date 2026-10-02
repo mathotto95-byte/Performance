@@ -18,6 +18,8 @@ def label(value):
 
 def date(value):
     value = text(value)
+    if not re.fullmatch(r"(?:\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})(?:[ T]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?", value):
+        return pd.NaT
     return pd.to_datetime(value, dayfirst=not bool(re.match(r"^\d{4}-\d\d-\d\d", value)), errors="coerce") if value else pd.NaT
 
 
@@ -75,7 +77,13 @@ def estadias_payload(payload):
     rows = result.get("tables", {}).get("mod_estadias_cruzamento_inicial", [])
     if not isinstance(rows, list) or not rows or not all(isinstance(r, dict) and {"nf", "placa_norm", "chegada_origem", "chegada_destino"}.issubset(r) for r in rows):
         raise ValueError("Backup sem resultados de Estadias válidos; base atual preservada.")
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    marks = result.get("performance_envios", [])
+    if marks:
+        marks = pd.DataFrame(marks)
+        if {"lcte_id", "analise_enviada_em"}.issubset(marks.columns) and not marks.lcte_id.duplicated().any():
+            df["analise_enviada_em"] = df.lcte_id.map(marks.set_index("lcte_id").analise_enviada_em)
+    return df
 
 
 def analyze(lcte, ots, estadias):
@@ -109,6 +117,7 @@ def analyze(lcte, ots, estadias):
             problems.append("monitoramento não localizado ou histórico OTS/OTD inválido")
         candidates = arrivals.get(key, []) if not ambiguous else []
         arrival = candidates[0] if len(candidates) == 1 else {}
+        item["Correspondência Estadias"] = "Exata" if arrival else "Sem correspondência"
         if not arrival:
             problems.append("NF + placa sem resultado único no Estadias")
         for dest, source in [("Previsão de Carga", "Previsao Carga"), ("Agendamento de Carga", "Agendamento Carga"), ("Data Limite", "Data Limite"), ("Agenda GFL", "Agenda GFL")]:
@@ -130,5 +139,39 @@ def analyze(lcte, ots, estadias):
             problems.append("OTD 1: emissão da NF sem horário")
         item["Motivo da classificação"] = "; ".join(problems)
         output.append(item)
-    columns = ["Nota Fiscal", "Placa", "Monitoramento", "Origem", "Destino", "Previsão de Carga", "Agendamento de Carga", "Chegada na Origem", "Emissão da NF", "Data Limite", "Agenda GFL", "Chegada no Destino", *RULES, "Motivo da classificação"]
-    return pd.DataFrame(output, columns=columns)
+    columns = ["Nota Fiscal", "Placa", "Monitoramento", "Origem", "Destino", "Previsão de Carga", "Agendamento de Carga", "Chegada na Origem", "Emissão da NF", "Data Limite", "Agenda GFL", "Chegada no Destino", *RULES, "Motivo da classificação", "Correspondência Estadias"]
+    result = pd.DataFrame(output, columns=columns)
+    result["Atendeu todas as regras"] = result.apply(attendance, axis=1)
+    return result
+
+
+def attendance(row):
+    values = [row.get(rule, UNKNOWN) for rule in RULES]
+    if "Fora do prazo" in values:
+        return "Não"
+    return "Sim" if all(v == "Dentro do prazo" for v in values) else UNKNOWN
+
+
+def indicators(result):
+    # analyze já consolida conflitos; não escolher uma linha arbitrária aqui.
+    result = result.drop_duplicates()
+    if result.duplicated(["Nota Fiscal", "Placa"]).any():
+        raise ValueError("Resultados conflitantes para NF + placa.")
+    valid = result["Nota Fiscal"].fillna("").ne("") & result.Placa.fillna("").ne("")
+    result = result[valid]
+    rows = []
+    for rule in RULES:
+        inside = int(result[rule].eq("Dentro do prazo").sum())
+        outside = int(result[rule].eq("Fora do prazo").sum())
+        total = inside + outside
+        rows.append({"Regra": rule, "Total analisado": total, "Dentro do prazo": inside,
+                     "Fora do prazo": outside, "Sem informação": len(result) - total,
+                     "% Dentro": inside * 100 / total if total else None,
+                     "% Fora": outside * 100 / total if total else None})
+    table = pd.DataFrame(rows)
+    total = int(table["Total analisado"].sum())
+    general = {"Viagens/NFs": len(result), "Regras analisadas": total,
+               "Dentro": int(table["Dentro do prazo"].sum()), "Fora": int(table["Fora do prazo"].sum()),
+               "Sem informação": int(table["Sem informação"].sum()),
+               "Conformidade %": table["Dentro do prazo"].sum() * 100 / total if total else None}
+    return table, general

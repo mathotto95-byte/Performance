@@ -42,7 +42,24 @@ OTS 2 compara agendamento de carga com previsão. OTS 3 compara chegada na orige
 
 OTD 1 permanece Sem informação: o histórico OTS não comprova o momento real de realização do agendamento. A emissão da NF é extraída exclusivamente de Data Emissão NF, nunca da emissão do CT-e. A tabela apresenta o motivo de cada classificação; registros sem chave única não são associados por aproximação.
 
-## Executar
+## Indicadores, painel e retorno ao Estadias
+
+Em **Análise Performance**, os percentuais usam somente Dentro + Fora. O total de NFs conta pares únicos de NF + placa; chaves ausentes não entram nos indicadores. **Atendeu todas as regras** é Não quando existe atraso, Sim quando todas as cinco regras têm informação e estão dentro, e Sem informação nos demais casos. Não há dispensas de regras presumidas.
+
+O **Painel de Controle** reutiliza os períodos por origem/destino e o identificador do registro Estadias. Início é chegada + franquia; fim é saída. Horas são calculadas sem arredondamento para inteiro e Valor é horas × R$ 68,00, arredondado somente para centavos. Totais financeiros contam cada período uma única vez, mesmo com várias notas. Tarefa fica vazia quando não há campo de tarefa na origem. Envio usa `analise_enviada_em`; Prazo é Envio + 15 dias corridos. Prazo vencido considera a data atual em São Paulo, sem vencer antecipadamente no próprio dia.
+
+O Estadias publica os envios nos próximos backups, sem mudar tabelas. Sincronize novamente depois desse backup. Por padrão, sua sincronização usa a branch `backup-data`; para outro destino, configure `branch` em `[estadias_sync]`.
+
+Para devolver o resultado, em Análise Performance clique **Publicar resultado para Estadias**. O arquivo `backups/performance_latest.json` é gravado na branch main do Performance com data da análise, motivos e identificação das bases. Configure um token com Contents: Read and write no repositório Performance:
+
+```toml
+[performance_publish]
+token = "SEU_TOKEN_COM_ESCRITA_NO_PERFORMANCE"
+```
+
+O token de OTS é usado como alternativa, se já possuir essa permissão. CONSULTA não pode publicar. A publicação é manual e abrange a análise completa das versões selecionadas. No Estadias, abra **PerformanceRW → Atualizar resultado**. Os dois sistemas não precisam compartilhar banco. Resultados com chave ambígua ou horários de chegada diferentes dos atuais não são vinculados. As regras são calculadas apenas no Performance.
+
+## Executar localmente
 
 Na pasta deste sistema:
 

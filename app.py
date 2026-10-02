@@ -1,5 +1,6 @@
 from io import BytesIO
 from pathlib import Path
+import hashlib
 
 import pandas as pd
 import streamlit as st
@@ -8,7 +9,8 @@ from core import FONTES, carregar, exportar, historico, ler_planilha, salvar
 from theme import apply_theme
 from auth import enforce_authentication, current_user, logout
 from ots_sync import settings as ots_settings, sync as sync_ots, status as ots_status
-from rules import analyze, prepare_lcte
+from rules import analyze, prepare_lcte, indicators
+from reporting import control_panel, render_panel, publish
 
 
 LOGO_PATH = Path(__file__).resolve().parent / "assets" / "rodo_wall_logo.png"
@@ -34,7 +36,7 @@ st.sidebar.caption("Gestão operacional • RW")
 usuario = current_user()
 st.sidebar.write(f"**Usuário:** {usuario['name']}")
 st.sidebar.write(f"**Perfil:** {usuario['role'].title()}")
-menu = ["Visão geral", "Análise Performance", "Consultar resultados", "Histórico"]
+menu = ["Visão geral", "Análise Performance", "Painel de Controle", "Consultar resultados", "Histórico"]
 if usuario['role'] in {"ADMIN", "OPERACIONAL"}:
     menu.insert(1, "Importações")
     menu.insert(1, "Sincronização OTS e OTD")
@@ -47,11 +49,12 @@ st.sidebar.caption("Bases: OTS e OTD / Estadia")
 st.divider()
 hist = historico()
 
-if pagina == "Análise Performance":
+if pagina in {"Análise Performance", "Painel de Controle"}:
     st.subheader("Performance por NF + Placa")
     st.caption("Observação do LCTE → monitoramento OTS/OTD. NF + placa → chegadas do Estadias. Utiliza a última versão de cada monitoramento na base selecionada.")
     st.info("OTD 1 fica Sem informação até existir evidência de quando o agendamento foi realizado. Data emissão do CT-e não substitui Data Emissão NF. Limites sem horário são comparados por dia.")
     bases = {}
+    sources = {}
     for fonte in FONTES:
         versoes = hist[hist.fonte == fonte]
         if versoes.empty:
@@ -66,12 +69,31 @@ if pagina == "Análise Performance":
         labels = {int(r.id): f"#{r.id} • {r.criado_em} • {r.arquivo}" for r in versoes.itertuples()}
         selected = st.selectbox(fonte, ids, format_func=labels.get)
         bases[fonte] = carregar(selected)
+        metadata = versoes[versoes.id == selected].iloc[0]
+        sources[fonte] = {"id": selected, "arquivo": metadata.arquivo, "importado_em": metadata.criado_em,
+                          "assinatura": hashlib.sha256(bases[fonte].to_json(orient="split", date_format="iso").encode()).hexdigest()}
     if not bases[FONTES[2]].empty:
         try:
             resultado = analyze(bases[FONTES[2]], bases[FONTES[0]], bases[FONTES[1]])
-            st.write(f"{len(resultado):,} NFs/placas analisadas")
-            st.dataframe(resultado, hide_index=True, use_container_width=True)
-            st.download_button("Exportar análise", exportar(resultado), "performance_nf_placa.xlsx")
+            analyzed_at = pd.Timestamp.now(tz="America/Sao_Paulo").isoformat()
+            resultado["Data/Hora da última análise"] = analyzed_at
+            if pagina == "Painel de Controle":
+                render_panel(control_panel(resultado, bases[FONTES[1]]))
+            else:
+                table, general = indicators(resultado)
+                cols = st.columns(3)
+                for i, (name, value) in enumerate(general.items()):
+                    cols[i % 3].metric(name, "—" if value is None else f"{value:.2f}%" if name.endswith("%") else value)
+                st.caption("Percentuais excluem Sem informação. Contagem por NF + placa única; nenhum dado ausente é presumido como regra dispensada.")
+                st.dataframe(table, hide_index=True, use_container_width=True)
+                st.dataframe(resultado, hide_index=True, use_container_width=True)
+                st.download_button("Exportar análise", exportar(resultado), "performance_nf_placa.xlsx")
+                if usuario['role'] in {"ADMIN", "OPERACIONAL"}:
+                    st.caption("Publica a análise completa das versões selecionadas para consulta no Estadias.")
+                    if st.button("Publicar resultado para Estadias", type="primary"):
+                        token = st.secrets.get("performance_publish", {}).get("token") or ots_settings()["token"]
+                        publish(resultado, sources, analyzed_at, token)
+                        st.success("Resultado publicado. No Estadias, abra PerformanceRW e clique em Atualizar resultado.")
         except ValueError as exc:
             st.error(str(exc))
 
@@ -81,8 +103,9 @@ elif pagina == "Sincronização Estadias":
     config = ots_settings()
     try:
         config["token"] = st.secrets.get("estadias_sync", {}).get("token") or config["token"]
+        config["branch"] = str(st.secrets.get("estadias_sync", {}).get("branch", "backup-data"))
     except FileNotFoundError:
-        pass
+        config["branch"] = "backup-data"
     st.caption("O token precisa de leitura no repositório Estadias. Pode usar o mesmo token do OTS ou estadias_sync.token nos Secrets.")
     if st.button("Sincronizar Estadias", type="primary"):
         try:
