@@ -6,6 +6,17 @@ from auth import authenticate, hash_password, verify_password, brasilia_now
 
 
 class LoginTests(unittest.TestCase):
+    def test_update_recovers_old_rules_module(self):
+        import rules
+        from importlib import reload
+        del rules.indicators
+        try:
+            app = self.app()
+            self.assertFalse(app.exception)
+            self.assertTrue(hasattr(rules, "indicators"))
+        finally:
+            reload(rules)
+
     def app(self, role="ADMIN"):
         app = AppTest.from_file("app.py", default_timeout=30)
         app.secrets["auth"] = {"users": {"teste": {

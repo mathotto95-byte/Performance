@@ -9,6 +9,13 @@ from core import FONTES, carregar, exportar, historico, ler_planilha, salvar
 from theme import apply_theme
 from auth import enforce_authentication, current_user, logout
 from ots_sync import settings as ots_settings, sync as sync_ots, status as ots_status
+import rules
+
+# Streamlit pode manter o módulo anterior em memória durante a atualização.
+if not hasattr(rules, "indicators"):
+    from importlib import reload
+    reload(rules)
+
 from rules import analyze, prepare_lcte, indicators
 from reporting import control_panel, render_panel, publish
 
