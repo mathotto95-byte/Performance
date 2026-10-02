@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-FONTES = ("Resultados da OTS e OTD", "Resultados Estadia")
+FONTES = ("Resultados da OTS e OTD", "Resultados Estadia", "LCTE / Observação")
 DB_PATH = Path(__file__).resolve().parent / "data" / "regras_estadia.sqlite3"
 
 

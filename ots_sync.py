@@ -59,8 +59,8 @@ def parse_payload(payload):
     return view
 
 
-def download_payload(token, branch="main"):
-    url = f"https://api.github.com/repos/{REPOSITORY}/contents/{BACKUP_PATH}?ref={quote(branch, safe='')}"
+def download_payload(token, branch="main", repository=REPOSITORY, backup_path=BACKUP_PATH):
+    url = f"https://api.github.com/repos/{repository}/contents/{backup_path}?ref={quote(branch, safe='')}"
     headers = {"Accept": "application/vnd.github.raw+json", "User-Agent": "Performance-RW"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -69,27 +69,34 @@ def download_payload(token, branch="main"):
             return json.load(response)
     except HTTPError as exc:
         if exc.code in (401, 403, 404):
-            raise ValueError(f"GitHub retornou {exc.code}. Confira o token, a permissão de leitura do OTSeOTD, a branch e a publicação do backup.") from None
+            raise ValueError(f"GitHub retornou {exc.code}. Confira o token, a permissão de leitura de {repository}, a branch e a publicação do backup.") from None
         raise ValueError(f"GitHub indisponível (HTTP {exc.code}). Tente novamente.") from None
     except (URLError, TimeoutError, json.JSONDecodeError):
         raise ValueError("Não foi possível ler o backup no GitHub. A base atual foi preservada.") from None
 
 
-def sync(token, branch="main", path=DB_PATH):
-    payload = download_payload(token, branch)
-    view = parse_payload(payload)
-    changed = salvar(FONTES[0], f"{REPOSITORY}/{BACKUP_PATH}", "Banco OTS e OTD", view, path)
+def sync(token, branch="main", path=DB_PATH, fonte=FONTES[0]):
+    if fonte == FONTES[1]:
+        from rules import estadias_payload
+        repository, backup = "mathotto95-byte/Estadias", "backups/estadias_latest.json"
+        payload = download_payload(token, branch, repository, backup)
+        view = estadias_payload(payload)
+    else:
+        repository, backup = REPOSITORY, BACKUP_PATH
+        payload = download_payload(token, branch)
+        view = parse_payload(payload)
+    changed = salvar(fonte, f"{repository}/{backup}", fonte, view, path)
     # Uma base A → B → A precisa apontar novamente para A, mesmo sem duplicar o conteúdo.
     serialized = view.to_json(orient="split", date_format="iso", force_ascii=False)
     with conectar(path) as conn:
-        row = conn.execute("SELECT id FROM importacoes WHERE fonte=? AND dados=?", (FONTES[0], serialized)).fetchone()
+        row = conn.execute("SELECT id FROM importacoes WHERE fonte=? AND dados=?", (fonte, serialized)).fetchone()
         conn.execute("CREATE TABLE IF NOT EXISTS sincronizacoes (fonte TEXT PRIMARY KEY, importacao_id INTEGER, gerado_em TEXT, sincronizado_em TEXT)")
-        conn.execute("INSERT OR REPLACE INTO sincronizacoes VALUES (?,?,?,?)", (FONTES[0], row[0], payload.get("generated_at", ""), datetime.now(timezone.utc).isoformat(timespec="seconds")))
+        conn.execute("INSERT OR REPLACE INTO sincronizacoes VALUES (?,?,?,?)", (fonte, row[0], payload.get("generated_at", ""), datetime.now(timezone.utc).isoformat(timespec="seconds")))
     return len(view), changed
 
 
-def status(path=DB_PATH):
+def status(path=DB_PATH, fonte=FONTES[0]):
     with conectar(path) as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS sincronizacoes (fonte TEXT PRIMARY KEY, importacao_id INTEGER, gerado_em TEXT, sincronizado_em TEXT)")
-        row = conn.execute("SELECT importacao_id,gerado_em,sincronizado_em FROM sincronizacoes WHERE fonte=?", (FONTES[0],)).fetchone()
+        row = conn.execute("SELECT importacao_id,gerado_em,sincronizado_em FROM sincronizacoes WHERE fonte=?", (fonte,)).fetchone()
     return row

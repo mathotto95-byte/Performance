@@ -28,7 +28,19 @@ O token precisa de Contents: Read no repositório `mathotto95-byte/OTSeOTD`. Tam
 
 No menu **Sincronização OTS e OTD**, clique em **Sincronizar resultados**. A origem é `backups/ots_otd_latest.json`, publicado pelo aplicativo `https://ontimeshipdev.streamlit.app/`. A tela informa a data do backup e da sincronização. ADMIN e OPERACIONAL podem sincronizar; CONSULTA pode consultar os resultados recebidos.
 
-Os dados reproduzem as onze colunas do **Banco OTS e OTD**, incluindo registros originais e alterações, sem limite de 500 linhas. A sincronização é manual e recebe a última versão publicada no GitHub, não lê diretamente a sessão do Streamlit nem o banco Supabase. Atualize o backup no sistema de origem para disponibilizar mudanças recentes. Backups inválidos ou vazios não substituem a base atual; versões anteriores ficam no histórico. NSDocs, LCTE e Estadias ainda não têm sincronização implementada.
+Os dados reproduzem as onze colunas do **Banco OTS e OTD**, incluindo registros originais e alterações, sem limite de 500 linhas. A sincronização é manual e recebe a última versão publicada no GitHub, não lê diretamente a sessão do Streamlit nem o banco Supabase. Atualize o backup no sistema de origem para disponibilizar mudanças recentes. Backups inválidos ou vazios não substituem a base atual; versões anteriores ficam no histórico.
+
+## Testar a análise Performance
+
+1. Em **Importações**, selecione **LCTE / Observação** e importe o Excel com Notas fiscais, Placa tração, Observação e Data Emissão NF.
+2. Sincronize OTS/OTD e **Estadias** pelos menus correspondentes. O token existente precisa ter leitura também no repositório `mathotto95-byte/Estadias`. Alternativamente, configure `[estadias_sync]` com `token = "SEU_TOKEN"`.
+3. Abra **Análise Performance**, confira as versões das três bases e exporte a análise se necessário.
+
+A extração usa números isolados de sete dígitos na Observação. Múltiplos códigos ou associações conflitantes ficam sem classificação. Monitoramento liga os agendamentos; NF + placa liga as chegadas já calculadas no Estadias. Os backups simples e completos do Estadias são aceitos. A análise não recalcula rastreador nem altera bancos de origem. NSDocs ainda não está integrado.
+
+OTS 2 compara agendamento de carga com previsão. OTS 3 compara chegada na origem com agendamento, usando previsão quando o agendamento está vazio. OTD 2 compara Agenda GFL com Data Limite. OTD 3 compara chegada no destino com Agenda GFL, usando Data Limite quando Agenda GFL está vazia. A igualdade é Dentro do prazo. Limites sem horário são comparados por dia; eventos sem horário no mesmo dia de um limite com hora ficam Sem informação. A análise usa o último registro OTS/OTD de cada monitoramento na versão selecionada.
+
+OTD 1 permanece Sem informação: o histórico OTS não comprova o momento real de realização do agendamento. A emissão da NF é extraída exclusivamente de Data Emissão NF, nunca da emissão do CT-e. A tabela apresenta o motivo de cada classificação; registros sem chave única não são associados por aproximação.
 
 ## Executar
 
@@ -50,7 +62,7 @@ Cada importação é uma versão completa, preservada no banco SQLite próprio e
 
 As colunas de origem são preservadas. A aba sugerida para OTS/OTD é `ots_otd`; para Estadia, `resultado_completo`, `resultado` ou `completo`, quando disponível. A seleção pode ser ajustada na tela.
 
-Esta primeira etapa contempla importação e consulta. Chaves de relacionamento, validações de negócio, franquias e cálculos ainda dependem da definição das regras. Não há cruzamento automático ou cálculo de cobrança nesta versão.
+O sistema contempla importação, consulta e análise de pontualidade por NF + placa, conforme as regras descritas acima. Não calcula cobrança de estadia.
 
 ## Login
 

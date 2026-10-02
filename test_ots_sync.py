@@ -14,6 +14,16 @@ def payload(code="001"):
 
 
 class SyncTests(unittest.TestCase):
+    def test_estadias_uses_existing_storage(self):
+        row = {"nf": "1", "placa_norm": "ABC1D23", "chegada_origem": "", "chegada_destino": ""}
+        source = {"results": {"tables": {"mod_estadias_cruzamento_inicial": [row]}}, "generated_at": "2026-10-02"}
+        with tempfile.TemporaryDirectory() as directory:
+            db = Path(directory) / "test.sqlite3"
+            with patch("ots_sync.download_payload", return_value=source):
+                self.assertEqual(sync("token", path=db, fonte="Resultados Estadia"), (1, True))
+                self.assertEqual(status(db, fonte="Resultados Estadia")[1], "2026-10-02")
+                self.assertEqual(historico(db).iloc[0].fonte, "Resultados Estadia")
+
     def test_columns_dates_and_code(self):
         df = parse_payload(payload())
         self.assertEqual(list(df.columns), list(COLUMNS.values()))
