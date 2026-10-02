@@ -8,6 +8,22 @@ from reporting import control_panel, panel_totals, money, publish
 
 
 class ReportingTests(unittest.TestCase):
+    def test_analysis_cards_and_approved_panel(self):
+        from streamlit.testing.v1 import AppTest
+        from core import FONTES
+        history = pd.DataFrame([{"id": i, "fonte": source, "arquivo": "teste", "criado_em": "2026-10-02"} for i, source in enumerate(FONTES)])
+        result = pd.DataFrame([{"Nota Fiscal": str(i), "Placa": "ABC1D23", "Atendeu todas as regras": status, **dict.fromkeys(RULES, rule)} for i, (status, rule) in enumerate([("Sim", "Dentro do prazo"), ("Não", "Fora do prazo"), ("Sem informação", "Sem informação")])])
+        panel = pd.DataFrame({"Dentro da Regra": ["Sim", "Não", "Sem informação", "Sim"], "Horas de Estadia": [10.5, 10.5, 10.5, 0], "Valor": [714, 714, 714, 0]})
+        with patch("core.historico", return_value=history), patch("core.carregar", return_value=pd.DataFrame({"teste": [1]})), patch("ots_sync.status", return_value=None), patch("rules.analyze", return_value=result), patch("reporting.control_panel", return_value=panel), patch("reporting.render_panel") as render:
+            app = AppTest.from_file("app.py", default_timeout=30)
+            app.session_state["authenticated"] = True
+            app.session_state["auth_user"] = {"username": "teste", "name": "Teste", "role": "CONSULTA"}
+            app.session_state["performance_menu"] = "Análise Performance"
+            app.run()
+            self.assertFalse(app.exception)
+            self.assertEqual([m.value for m in app.metric][:4], ["3", "1", "1", "1"])
+            self.assertEqual(render.call_args[0][0].index.tolist(), [0])
+
     def test_publication_reuses_remote_sha_and_preserves_previous_on_invalid(self):
         row = {"Nota Fiscal": "1", "Placa": "ABC1D23", "Atendeu todas as regras": "Sem informação", "Correspondência Estadias": "Exata", "Motivo da classificação": "Sem dados", "Chegada na Origem": "", "Chegada no Destino": "", **dict.fromkeys(RULES, "Sem informação")}
         response = MagicMock()

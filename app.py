@@ -92,13 +92,29 @@ if pagina in {"Análise Performance", "Painel de Controle"}:
                 render_panel(control_panel(resultado, bases[FONTES[1]]))
             else:
                 table, general = indicators(resultado)
-                cols = st.columns(3)
-                for i, (name, value) in enumerate(general.items()):
-                    cols[i % 3].metric(name, "—" if value is None else f"{value:.2f}%" if name.endswith("%") else value)
-                st.caption("Percentuais excluem Sem informação. Contagem por NF + placa única; nenhum dado ausente é presumido como regra dispensada.")
-                st.dataframe(table, hide_index=True, use_container_width=True)
-                st.dataframe(resultado, hide_index=True, use_container_width=True)
-                st.download_button("Exportar análise", exportar(resultado), "performance_nf_placa.xlsx")
+                unique = resultado.drop_duplicates(["Nota Fiscal", "Placa"])
+                unique = unique[unique["Nota Fiscal"].fillna("").ne("") & unique.Placa.fillna("").ne("")]
+                st.subheader("Resultado geral por NF + Placa")
+                cards = st.columns(4)
+                cards[0].metric("NFs/viagens analisadas", len(unique))
+                for card, label, status in zip(cards[1:], ["Dentro das regras", "Fora das regras", "Sem informação"], ["Sim", "Não", "Sem informação"]):
+                    card.metric(label, int(unique["Atendeu todas as regras"].eq(status).sum()))
+                st.subheader("Estadias dentro das regras")
+                panel = control_panel(resultado, bases[FONTES[1]])
+                approved = panel[panel["Dentro da Regra"].eq("Sim") & panel["Horas de Estadia"].gt(0) & panel["Valor"].notna()]
+                if approved.empty:
+                    st.info("Nenhuma estadia com período válido e todas as regras atendidas. Resultados Sem informação não são considerados aprovados.")
+                else:
+                    render_panel(approved)
+                with st.expander("Indicadores por regra"):
+                    cols = st.columns(3)
+                    for i, (name, value) in enumerate(general.items()):
+                        cols[i % 3].metric(name, "—" if value is None else f"{value:.2f}%" if name.endswith("%") else value)
+                    st.caption("Percentuais excluem Sem informação. Contagem por NF + placa única; nenhum dado ausente é presumido como regra dispensada.")
+                    st.dataframe(table, hide_index=True, use_container_width=True)
+                with st.expander("Todos os resultados da análise"):
+                    st.dataframe(resultado, hide_index=True, use_container_width=True)
+                    st.download_button("Exportar análise", exportar(resultado), "performance_nf_placa.xlsx")
                 if usuario['role'] in {"ADMIN", "OPERACIONAL"}:
                     st.caption("Publica a análise completa das versões selecionadas para consulta no Estadias.")
                     if st.button("Publicar resultado para Estadias", type="primary"):
