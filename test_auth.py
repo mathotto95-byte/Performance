@@ -6,6 +6,12 @@ from auth import authenticate, hash_password, verify_password, brasilia_now
 
 
 class LoginTests(unittest.TestCase):
+    def test_results_shortcut(self):
+        app = self.submit(self.app())
+        next(b for b in app.button if b.label == "Ver resultados das análises").click().run(timeout=60)
+        self.assertFalse(app.exception)
+        self.assertEqual(app.sidebar.radio[0].value, "Análise Performance")
+
     def test_update_recovers_old_rules_module(self):
         import rules
         from importlib import reload

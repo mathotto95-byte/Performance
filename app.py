@@ -37,6 +37,8 @@ with atualizar:
     if st.button("Atualizar página", use_container_width=True):
         st.rerun()
 st.caption("Importação e consulta dos resultados de OTS/OTD e Estadia.")
+if st.button("Ver resultados das análises", type="primary"):
+    st.session_state["performance_menu"] = "Análise Performance"
 
 st.sidebar.title("Performance RW")
 st.sidebar.caption("Gestão operacional • RW")
@@ -48,7 +50,7 @@ if usuario['role'] in {"ADMIN", "OPERACIONAL"}:
     menu.insert(1, "Importações")
     menu.insert(1, "Sincronização OTS e OTD")
     menu.insert(2, "Sincronização Estadias")
-pagina = st.sidebar.radio("Menu", menu)
+pagina = st.sidebar.radio("Menu", menu, key="performance_menu")
 if st.sidebar.button("Sair", use_container_width=True):
     logout()
 st.sidebar.divider()
@@ -79,7 +81,9 @@ if pagina in {"Análise Performance", "Painel de Controle"}:
         metadata = versoes[versoes.id == selected].iloc[0]
         sources[fonte] = {"id": selected, "arquivo": metadata.arquivo, "importado_em": metadata.criado_em,
                           "assinatura": hashlib.sha256(bases[fonte].to_json(orient="split", date_format="iso").encode()).hexdigest()}
-    if not bases[FONTES[2]].empty:
+    if bases[FONTES[2]].empty:
+        st.info("Para exibir os indicadores e os resultados por NF, acesse Importações, selecione LCTE / Observação e importe a planilha com as notas, placas e monitoramentos. Depois retorne a esta tela.")
+    else:
         try:
             resultado = analyze(bases[FONTES[2]], bases[FONTES[0]], bases[FONTES[1]])
             analyzed_at = pd.Timestamp.now(tz="America/Sao_Paulo").isoformat()
