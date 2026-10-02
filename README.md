@@ -44,6 +44,8 @@ OTD 1 permanece Sem informação: o histórico OTS não comprova o momento real 
 
 ## Indicadores, painel e retorno ao Estadias
 
+O filtro **Mês de emissão da NF** limita os indicadores, listas e exportações da tela. A lista **Válidas para validação manual — OTS 2 e OTD 2** inclui NFs com ambas as regras dentro do prazo, mantendo visíveis as pendências das demais regras e de correspondência no Estadias. A inclusão nessa lista não aprova a viagem nem confirma cobrança de estadia. A publicação para Estadias continua abrangendo a base completa, independentemente do filtro de mês.
+
 Em **Análise Performance**, os percentuais usam somente Dentro + Fora. O total de NFs conta pares únicos de NF + placa; chaves ausentes não entram nos indicadores. **Atendeu todas as regras** é Não quando existe atraso, Sim quando todas as cinco regras têm informação e estão dentro, e Sem informação nos demais casos. Não há dispensas de regras presumidas.
 
 O **Painel de Controle** reutiliza os períodos por origem/destino e o identificador do registro Estadias. Início é chegada + franquia; fim é saída. Horas são calculadas sem arredondamento para inteiro e Valor é horas × R$ 68,00, arredondado somente para centavos. Totais financeiros contam cada período uma única vez, mesmo com várias notas. Tarefa fica vazia quando não há campo de tarefa na origem. Envio usa `analise_enviada_em`; Prazo é Envio + 15 dias corridos. Prazo vencido considera a data atual em São Paulo, sem vencer antecipadamente no próprio dia.

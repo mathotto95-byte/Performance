@@ -42,6 +42,8 @@ def control_panel(result, stays):
             period = f"{code}|{side}"
             for nf in sorted(nfs):
                 analysis = lookup.get((nf, plate), {})
+                if not analysis:
+                    continue
                 exact = analysis.get("Correspondência Estadias") == "Exata"
                 rows.append({"Tarefa": text(stay.get("tarefa")), "Envio": sent,
                              "Prazo": sent + pd.Timedelta(days=15) if pd.notna(sent) else pd.NaT,

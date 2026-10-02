@@ -91,6 +91,12 @@ if pagina in {"Análise Performance", "Painel de Controle"}:
             resultado = analyze(bases[FONTES[2]], bases[FONTES[0]], bases[FONTES[1]])
             analyzed_at = pd.Timestamp.now(tz="America/Sao_Paulo").isoformat()
             resultado["Data/Hora da última análise"] = analyzed_at
+            resultado_completo = resultado
+            meses = resultado["Emissão da NF"].map(rules.date).map(lambda d: d.strftime("%Y-%m") if pd.notna(d) else "Sem data")
+            mes = st.selectbox("Mês de emissão da NF", ["Todos", *sorted(meses.unique(), reverse=True)], key="analysis_month")
+            if mes != "Todos":
+                resultado = resultado.loc[meses.eq(mes)].copy()
+            st.caption("O mês selecionado filtra os indicadores, as listas e as exportações da tela.")
             if pagina == "Painel de Controle":
                 render_panel(control_panel(resultado, bases[FONTES[1]]))
             else:
@@ -109,6 +115,13 @@ if pagina in {"Análise Performance", "Painel de Controle"}:
                     st.info("Nenhuma estadia com período válido e todas as regras atendidas. Resultados Sem informação não são considerados aprovados.")
                 else:
                     render_panel(approved)
+                st.subheader("Válidas para validação manual — OTS 2 e OTD 2")
+                st.caption("Lista de NFs com OTS 2 e OTD 2 dentro do prazo. Confira as demais regras, a correspondência e a existência de estadia antes de aprovar.")
+                manual = resultado.loc[resultado["OTS 2"].eq("Dentro do prazo") & resultado["OTD 2"].eq("Dentro do prazo")].copy()
+                manual.insert(0, "Tratativa", "Válida para validação manual")
+                st.metric("NFs para validação manual", len(manual))
+                st.dataframe(manual, hide_index=True, use_container_width=True)
+                st.download_button("Exportar validação manual", exportar(manual), "validacao_manual.xlsx")
                 with st.expander("Indicadores por regra"):
                     cols = st.columns(3)
                     for i, (name, value) in enumerate(general.items()):
@@ -122,7 +135,7 @@ if pagina in {"Análise Performance", "Painel de Controle"}:
                     st.caption("Publica a análise completa das versões selecionadas para consulta no Estadias.")
                     if st.button("Publicar resultado para Estadias", type="primary"):
                         token = st.secrets.get("performance_publish", {}).get("token") or ots_settings()["token"]
-                        publish(resultado, sources, analyzed_at, token)
+                        publish(resultado_completo, sources, analyzed_at, token)
                         st.success("Resultado publicado. No Estadias, abra PerformanceRW e clique em Atualizar resultado.")
         except ValueError as exc:
             st.error(str(exc))

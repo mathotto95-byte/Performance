@@ -14,6 +14,8 @@ class ReportingTests(unittest.TestCase):
         history = pd.DataFrame([{"id": i, "fonte": source, "arquivo": "teste", "criado_em": "2026-10-02"} for i, source in enumerate(FONTES)])
         result = pd.DataFrame([{"Nota Fiscal": str(i), "Placa": "ABC1D23", "Atendeu todas as regras": status, **dict.fromkeys(RULES, rule)} for i, (status, rule) in enumerate([("Sim", "Dentro do prazo"), ("Não", "Fora do prazo"), ("Sem informação", "Sem informação")])])
         panel = pd.DataFrame({"Dentro da Regra": ["Sim", "Não", "Sem informação", "Sim"], "Horas de Estadia": [10.5, 10.5, 10.5, 0], "Valor": [714, 714, 714, 0]})
+        result["Emissão da NF"] = ["01/08/2026", "01/09/2026", "02/09/2026"]
+        result.loc[2, ["OTS 2", "OTD 2"]] = "Dentro do prazo"
         with patch("core.historico", return_value=history), patch("core.carregar", return_value=pd.DataFrame({"teste": [1]})), patch("ots_sync.status", return_value=None), patch("rules.analyze", return_value=result), patch("reporting.control_panel", return_value=panel), patch("reporting.render_panel") as render:
             app = AppTest.from_file("app.py", default_timeout=30)
             app.session_state["authenticated"] = True
@@ -23,6 +25,11 @@ class ReportingTests(unittest.TestCase):
             self.assertFalse(app.exception)
             self.assertEqual([m.value for m in app.metric][:4], ["3", "1", "1", "1"])
             self.assertEqual(render.call_args[0][0].index.tolist(), [0])
+            self.assertEqual(next(m.value for m in app.metric if m.label == "NFs para validação manual"), "2")
+            app.selectbox(key="analysis_month").select("2026-09").run()
+            self.assertFalse(app.exception)
+            self.assertEqual([m.value for m in app.metric][:4], ["2", "0", "1", "1"])
+            self.assertEqual(next(m.value for m in app.metric if m.label == "NFs para validação manual"), "1")
 
     def test_publication_reuses_remote_sha_and_preserves_previous_on_invalid(self):
         row = {"Nota Fiscal": "1", "Placa": "ABC1D23", "Atendeu todas as regras": "Sem informação", "Correspondência Estadias": "Exata", "Motivo da classificação": "Sem dados", "Chegada na Origem": "", "Chegada no Destino": "", **dict.fromkeys(RULES, "Sem informação")}
@@ -63,6 +70,7 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual(panel.iloc[0].Prazo, pd.Timestamp("2026-10-16"))
         self.assertEqual(panel_totals(panel)["Valor total"], 714)
         self.assertEqual(money(10), 680)
+        self.assertTrue(control_panel(analysis.iloc[:0], stays).empty)
         stays.loc[0, "saida_origem"] = "2026-09-30 08:00"
         self.assertTrue(pd.isna(control_panel(analysis, stays).iloc[0].Valor))
 
