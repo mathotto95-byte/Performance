@@ -8,6 +8,25 @@ from reporting import control_panel, panel_totals, money, publish
 
 
 class ReportingTests(unittest.TestCase):
+    def test_overview_rule_cards_month_and_unknown_denominator(self):
+        from streamlit.testing.v1 import AppTest
+        from core import FONTES
+        history = pd.DataFrame([{"id": i, "fonte": f, "arquivo": "teste", "criado_em": "2026-10-05", "quantidade": 2} for i, f in enumerate(FONTES)])
+        result = pd.DataFrame([{"Nota Fiscal": str(i), "Placa": "ABC1D23", "Emissão da NF": day, **dict.fromkeys(RULES, state)} for i, (day, state) in enumerate([("01/09/2026", "Dentro do prazo"), ("01/10/2026", "Sem informação")])])
+        with patch("core.historico", return_value=history), patch("core.carregar", return_value=pd.DataFrame({"x": [1]})), patch("ots_sync.status", return_value=None), patch("rules.analyze", return_value=result):
+            app = AppTest.from_file("app.py", default_timeout=30)
+            app.session_state["authenticated"] = True
+            app.session_state["auth_user"] = {"username": "teste", "name": "Teste", "role": "CONSULTA"}
+            app.session_state["performance_menu"] = "Visão geral"
+            app.run()
+            self.assertFalse(app.exception)
+            self.assertEqual([m.value for m in app.metric if m.label == "Atendimento"], ["100.00%"] * 5)
+            self.assertEqual([m.value for m in app.metric if m.label == "Sem informação"], ["1"] * 5)
+            app.selectbox(key="overview_month").select("2026-10").run()
+            self.assertFalse(app.exception)
+            self.assertEqual([m.value for m in app.metric if m.label == "Atendimento"], ["—"] * 5)
+            self.assertEqual(next(m.value for m in app.metric if m.label == "Viagens/NFs"), "1")
+
     def test_analysis_cards_and_approved_panel(self):
         from streamlit.testing.v1 import AppTest
         from core import FONTES

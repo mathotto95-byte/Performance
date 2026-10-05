@@ -190,11 +190,13 @@ elif pagina == "Sincronização OTS e OTD":
         st.download_button("Exportar Banco OTS e OTD", exportar(resultado), "banco_ots_otd.xlsx")
 
 elif pagina == "Visão geral":
+    bases = {}
     for col, fonte in zip(st.columns(len(FONTES)), FONTES):
         base = hist[hist.fonte == fonte]
         estado = ots_status(fonte=fonte)
         if estado:
             base = hist[hist.id == estado[0]]
+        bases[fonte] = carregar(int(base.iloc[0].id)) if not base.empty else pd.DataFrame()
         with col:
             st.subheader(fonte)
             st.metric("Registros na última importação", int(base.iloc[0].quantidade) if not base.empty else 0)
@@ -202,7 +204,33 @@ elif pagina == "Visão geral":
                 st.info("Aguardando importação.")
             else:
                 st.caption(f"Arquivo: {base.iloc[0].arquivo} • {base.iloc[0].criado_em}")
-    st.info("Importe o LCTE com Observação, sincronize as bases e abra Análise Performance.")
+    st.subheader("Atendimento das regras de estadia")
+    if bases[FONTES[2]].empty:
+        st.info("Sincronize Estadias para receber o LCTE e exibir os indicadores das cinco regras.")
+    else:
+        try:
+            resultado = analyze(bases[FONTES[2]], bases[FONTES[0]], bases[FONTES[1]])
+            meses = resultado["Emissão da NF"].map(rules.date).map(lambda d: d.strftime("%Y-%m") if pd.notna(d) else "Sem data")
+            mes = st.selectbox("Mês de emissão da NF", ["Todos", *sorted(meses.unique(), reverse=True)], key="overview_month")
+            if mes != "Todos":
+                resultado = resultado.loc[meses.eq(mes)]
+            table, general = indicators(resultado)
+            summary = st.columns(3)
+            summary[0].metric("Viagens/NFs", general["Viagens/NFs"])
+            summary[1].metric("Regras analisadas", general["Regras analisadas"])
+            summary[2].metric("Atendimento geral", "—" if general["Conformidade %"] is None else f'{general["Conformidade %"]:.2f}%')
+            st.caption("Percentuais = Dentro ÷ (Dentro + Fora). Sem informação não entra no denominador. Viagens contadas por NF + placa única.")
+            for col, row in zip(st.columns(len(rules.RULES)), table.to_dict("records")):
+                with col:
+                    st.subheader(row["Regra"])
+                    st.metric("Atendimento", "—" if pd.isna(row["% Dentro"]) else f'{row["% Dentro"]:.2f}%')
+                    st.metric("Total analisado", row["Total analisado"])
+                    st.metric("Dentro do prazo", row["Dentro do prazo"])
+                    st.metric("Fora do prazo", row["Fora do prazo"])
+                    st.metric("Sem informação", row["Sem informação"])
+            st.caption("Sem registros analisáveis, o percentual aparece como —. Os detalhes estão em Análise Performance.")
+        except ValueError as exc:
+            st.error(str(exc))
 
 elif pagina == "Importações":
     fonte = st.selectbox("Base de destino", FONTES)
