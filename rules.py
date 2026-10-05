@@ -193,6 +193,29 @@ def analyze(lcte, ots, estadias):
     return result
 
 
+def schedule_indicators(ots):
+    pairs = {"OTS": ("Agendamento Carga", "Previsao Carga"), "OTD": ("Agenda GFL", "Data Limite")}
+    required = {"Codigo de Monitoramento", "Data/Hora do Registro", "ID", *[c for pair in pairs.values() for c in pair]}
+    if not required.issubset(ots.columns):
+        raise ValueError("Os indicadores OTS/OTD precisam das colunas do Banco OTS e OTD.")
+    ordered = ots.assign(_date=ots["Data/Hora do Registro"].map(date), _id=pd.to_numeric(ots.ID, errors="coerce"))
+    ordered = ordered.sort_values(["_date", "_id"], ascending=False, na_position="last")
+    rows = []
+    for code, group in ordered.groupby("Codigo de Monitoramento", dropna=False):
+        valid = bool(text(code)) and group._date.notna().all() and group._id.notna().all()
+        row = group.iloc[0]
+        result = {"Monitoramento": text(code)}
+        for name, (actual, limit) in pairs.items():
+            a, b = date(row[actual]), date(row[limit])
+            result[name] = UNKNOWN
+            if valid and pd.notna(a) and pd.notna(b):
+                a = a.tz_convert("America/Sao_Paulo") if a.tzinfo else a
+                b = b.tz_convert("America/Sao_Paulo") if b.tzinfo else b
+                result[name] = "OK" if a.date() == b.date() else "Antecipado" if a.date() < b.date() else "Atrasado"
+        rows.append(result)
+    return pd.DataFrame(rows, columns=["Monitoramento", "OTS", "OTD"])
+
+
 def attendance(row):
     values = [row.get(rule, UNKNOWN) for rule in RULES]
     if "Fora do prazo" in values:

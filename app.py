@@ -13,7 +13,7 @@ import rules
 from importlib import reload
 
 # Streamlit pode manter o módulo anterior em memória durante a atualização.
-if not hasattr(rules, "indicators") or not hasattr(rules, "resolve_arrival"):
+if not hasattr(rules, "indicators") or not hasattr(rules, "schedule_indicators"):
     reload(rules)
 if not hasattr(ots_sync, "_save_snapshot"):
     reload(ots_sync)
@@ -204,6 +204,26 @@ elif pagina == "Visão geral":
                 st.info("Aguardando importação.")
             else:
                 st.caption(f"Arquivo: {base.iloc[0].arquivo} • {base.iloc[0].criado_em}")
+    st.subheader("Agendamentos — somente Banco OTS e OTD")
+    st.caption("Último registro por monitoramento. Comparação por dia, sem horário. Percentuais sobre OK + Antecipado + Atrasado; Sem informação fica fora do cálculo. Este resumo usa toda a base OTS/OTD e não depende do LCTE ou do filtro de emissão da NF abaixo.")
+    if bases[FONTES[0]].empty:
+        st.info("Sincronize OTS e OTD para exibir os cards de agendamentos.")
+    else:
+        try:
+            schedules = rules.schedule_indicators(bases[FONTES[0]])
+            for name, description in [("OTS", "Agendamento Carga × Previsão Carga"), ("OTD", "Agenda GFL × Data Limite")]:
+                st.subheader(f"{name} — {description}")
+                counts = schedules[name].value_counts()
+                total = int(schedules[name].ne(rules.UNKNOWN).sum())
+                cards = st.columns(5)
+                cards[0].metric("Total analisado", total)
+                for card, status in zip(cards[1:4], ["OK", "Antecipado", "Atrasado"]):
+                    count = int(counts.get(status, 0))
+                    card.metric(f"{name} {status}", count)
+                    card.caption(f"{count / total:.2%}" if total else "—")
+                cards[4].metric("Sem informação", int(counts.get(rules.UNKNOWN, 0)))
+        except ValueError as exc:
+            st.error(str(exc))
     st.subheader("Atendimento das regras de estadia")
     if bases[FONTES[2]].empty:
         st.info("Sincronize Estadias para receber o LCTE e exibir os indicadores das cinco regras.")

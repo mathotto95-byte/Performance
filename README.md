@@ -46,6 +46,8 @@ Chegadas do rastreador podem ser recuperadas de duplicações com a mesma NF + p
 
 ## Indicadores, painel e retorno ao Estadias
 
+Na **Visão geral**, os cards **Agendamentos — somente Banco OTS e OTD** independem do LCTE e do Estadias. Usam o último registro por monitoramento: OTS compara Agendamento Carga com Previsão Carga; OTD compara Agenda GFL com Data Limite. Mesmo dia = OK, antes = Antecipado, depois = Atrasado. Horários não alteram essa classificação. Cada status tem quantidade e percentual sobre os registros analisáveis; datas ausentes/inválidas ficam Sem informação. Esses cards usam toda a base OTS/OTD, independentemente do filtro de mês de emissão da NF aplicado às cinco regras de estadia.
+
 O filtro **Mês de emissão da NF** limita os indicadores, listas e exportações da tela. A lista **Válidas para validação manual — OTS 2 e OTD 2** inclui NFs com ambas as regras dentro do prazo, mantendo visíveis as pendências das demais regras e de correspondência no Estadias. A inclusão nessa lista não aprova a viagem nem confirma cobrança de estadia. A publicação para Estadias continua abrangendo a base completa, independentemente do filtro de mês.
 
 Em **Análise Performance**, os percentuais usam somente Dentro + Fora. O total de NFs conta pares únicos de NF + placa; chaves ausentes não entram nos indicadores. **Atendeu todas as regras** é Não quando existe atraso, Sim quando todas as cinco regras têm informação e estão dentro, e Sem informação nos demais casos. Não há dispensas de regras presumidas.

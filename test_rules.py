@@ -1,9 +1,19 @@
 import unittest
 import pandas as pd
-from rules import analyze, compare, prepare_lcte, estadias_payload, resolve_arrival
+from rules import analyze, compare, prepare_lcte, estadias_payload, resolve_arrival, schedule_indicators
 
 
 class RulesTest(unittest.TestCase):
+    def test_standalone_schedules_calendar_days_and_latest(self):
+        rows = []
+        for i, value in enumerate(["01/09/2026 23:59", "31/08/2026", "02/09/2026", "invalid"]):
+            rows.append({"ID": i, "Codigo de Monitoramento": str(i), "Data/Hora do Registro": "01/09/2026 10:00", "Agendamento Carga": value, "Previsao Carga": "01/09/2026 08:00", "Agenda GFL": value, "Data Limite": "01/09/2026"})
+        rows.append({**rows[0], "ID": 99, "Data/Hora do Registro": "31/08/2026 10:00", "Agendamento Carga": "10/09/2026"})
+        result = schedule_indicators(pd.DataFrame(rows))
+        self.assertEqual(len(result), 4)
+        for rule in ["OTS", "OTD"]:
+            self.assertEqual(result[rule].tolist(), ["OK", "Antecipado", "Atrasado", "Sem informação"])
+
     def test_same_trip_duplicate_arrivals_and_conflicts(self):
         first = {"chave_viagem": "ABC|20260901|CTE1", "chegada_origem": "2026-09-01 08:00", "chegada_destino": ""}
         empty = {**first, "chegada_origem": "", "chegada_destino": "2026-09-02 12:00"}
