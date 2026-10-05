@@ -7,6 +7,7 @@ import pandas as pd
 
 UNKNOWN = "Sem informação"
 RULES = ["OTS 2", "OTS 3", "OTD 1", "OTD 2", "OTD 3"]
+MANUAL_OTD_SUPPORTED = True
 
 
 def text(value):
@@ -224,7 +225,7 @@ def schedule_indicators(ots, analysis=None):
     for code, group in ordered.groupby("Codigo de Monitoramento", dropna=False):
         valid = bool(text(code)) and group._date.notna().all() and group._id.notna().all()
         row = group.iloc[0]
-        result = {"Monitoramento": text(code)}
+        result = {**{c: row[c] for c in ots.columns}, "Monitoramento": text(code)}
         for name, (actual, limit) in pairs.items():
             a, b = date(row[actual]), date(row[limit])
             if pd.notna(b) and b.tzinfo:
@@ -238,7 +239,7 @@ def schedule_indicators(ots, analysis=None):
                 if name == "OTD" and b.weekday() == 6 and b.date() <= a.date() <= date(otd_deadline(row[limit])).date():
                     result[name] = "OK"
         rows.append(result)
-    result = pd.DataFrame(rows, columns=["Monitoramento", "OTS", "OTD", "Mês OTS", "Mês OTD"])
+    result = pd.DataFrame(rows, columns=list(dict.fromkeys(["Monitoramento", *ots.columns, "OTS", "OTD", "Mês OTS", "Mês OTD"])))
     if analysis is not None and not analysis.empty and "Exceção OTD por chegada" in analysis:
         for code, group in analysis.groupby("Monitoramento"):
             if not text(code) or not group["Exceção OTD por chegada"].eq(True).all():

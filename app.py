@@ -13,14 +13,20 @@ import rules
 from importlib import reload
 
 # Streamlit pode manter o módulo anterior em memória durante a atualização.
-if not hasattr(rules, "indicators") or not hasattr(rules, "otd_deadline"):
+if not hasattr(rules, "indicators") or not hasattr(rules, "MANUAL_OTD_SUPPORTED"):
     reload(rules)
 if not hasattr(ots_sync, "_save_snapshot"):
     reload(ots_sync)
 
 from ots_sync import settings as ots_settings, sync as sync_ots, status as ots_status
-from rules import analyze, prepare_lcte, indicators
+from rules import prepare_lcte, indicators
 from reporting import control_panel, render_panel, publish
+from manual_otd import review_queue, apply_reviews, render_reviews
+
+
+def analyze(lcte, ots, estadias):
+    result = rules.analyze(lcte, ots, estadias)
+    return apply_reviews(result, review_queue(ots, result))
 
 
 LOGO_PATH = Path(__file__).resolve().parent / "assets" / "rodo_wall_logo.png"
@@ -212,8 +218,12 @@ elif pagina == "Visão geral":
         st.info("Sincronize OTS e OTD para exibir os cards de agendamentos.")
     else:
         try:
-            analysis_for_schedules = analyze(bases[FONTES[2]], bases[FONTES[0]], bases[FONTES[1]]) if not bases[FONTES[2]].empty else None
+            analysis_for_schedules = rules.analyze(bases[FONTES[2]], bases[FONTES[0]], bases[FONTES[1]]) if not bases[FONTES[2]].empty else None
+            queue = review_queue(bases[FONTES[0]], analysis_for_schedules)
             schedules = rules.schedule_indicators(bases[FONTES[0]], analysis_for_schedules)
+            if not queue.empty:
+                approved_codes = queue.loc[queue["Dentro da regra"], "Monitoramento"]
+                schedules.loc[schedules.Monitoramento.isin(approved_codes), "OTD"] = "OK"
             if "Mês OTS" not in schedules:
                 reload(rules)
                 schedules = rules.schedule_indicators(bases[FONTES[0]])
@@ -231,6 +241,9 @@ elif pagina == "Visão geral":
                     card.metric(f"{name} {status}", count)
                     card.caption(f"{count / total:.2%}" if total else "—")
                 cards[4].metric("Sem informação", int(counts.get(rules.UNKNOWN, 0)))
+            if "otd_review_saved" in st.session_state:
+                st.success(st.session_state.pop("otd_review_saved"))
+            render_reviews(queue, schedule_month, usuario)
         except ValueError as exc:
             st.error(str(exc))
     st.subheader("Atendimento das regras de estadia")
