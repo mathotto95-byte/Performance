@@ -10,6 +10,27 @@ from manual_otd import review_queue, save_reviews, apply_reviews
 
 
 class ManualOTDTests(unittest.TestCase):
+    def test_monitoring_links_without_lcte_and_displays_all_candidates(self):
+        ots = pd.DataFrame([{"ID": 1, "Codigo de Monitoramento": "1234567", "Data/Hora do Registro": "01/09/2026", "Previsao Carga": "01/09/2026", "Agendamento Carga": "01/09/2026", "Data Limite": "02/09/2026", "Agenda GFL": "03/09/2026"}])
+        stays = pd.DataFrame([
+            {"id": 1, "monitoramento": "1234567.0", "nf": "0001", "placa_norm": "ABC1D23", "chegada_destino": "02/09/2026 10:00"},
+            {"id": 2, "monitoramento": "1234567", "nf": "0002", "placa_norm": "DEF4G56", "chegada_destino": "03/09/2026 10:00"},
+            {"id": 3, "monitoramento": "91234567", "nf": "9999", "placa_norm": "XYZ1234"}])
+        with tempfile.TemporaryDirectory() as directory:
+            db = Path(directory) / "test.sqlite3"
+            queue = review_queue(ots, None, db, stays=stays)
+            self.assertEqual(queue.iloc[0]["Nota Fiscal"], "0001\n0002")
+            self.assertEqual(queue.iloc[0]["Placa"], "ABC1D23\nDEF4G56")
+            self.assertEqual(queue.iloc[0]["Chegada no Destino"], "02/09/2026 10:00\n03/09/2026 10:00")
+            self.assertEqual(queue.iloc[0]["OTD automático"], "Atrasado")
+            self.assertFalse(queue.iloc[0]["Dentro da regra"])
+            edited = queue.copy()
+            edited["Dentro da regra"] = True
+            edited["Justificativa"] = "Conferido pelo monitoramento"
+            save_reviews(edited, queue, {"username": "teste", "role": "ADMIN"}, db)
+            stays.loc[0, "chegada_destino"] = "04/09/2026"
+            self.assertFalse(review_queue(ots, None, db, stays=stays).iloc[0]["Dentro da regra"])
+
     def test_persistent_approval_revoke_source_change_and_permissions(self):
         ots = pd.DataFrame([{"ID": 1, "Codigo de Monitoramento": "1234567", "Data/Hora do Registro": "01/09/2026", "Previsao Carga": "01/09/2026", "Agendamento Carga": "01/09/2026", "Data Limite": "02/09/2026", "Agenda GFL": "03/09/2026"}])
         lcte = pd.DataFrame([{"Notas fiscais": "1", "Placa tração": "ABC1D23", "Observação": "1234567"}])

@@ -21,12 +21,15 @@ if not hasattr(ots_sync, "_save_snapshot"):
 from ots_sync import settings as ots_settings, sync as sync_ots, status as ots_status
 from rules import prepare_lcte, indicators
 from reporting import control_panel, render_panel, publish
+import manual_otd
+if not hasattr(manual_otd, "MONITORING_LINK_SUPPORTED"):
+    reload(manual_otd)
 from manual_otd import review_queue, apply_reviews, render_reviews
 
 
 def analyze(lcte, ots, estadias):
     result = rules.analyze(lcte, ots, estadias)
-    return apply_reviews(result, review_queue(ots, result))
+    return apply_reviews(result, review_queue(ots, result, stays=estadias))
 
 
 LOGO_PATH = Path(__file__).resolve().parent / "assets" / "rodo_wall_logo.png"
@@ -219,7 +222,7 @@ elif pagina == "Visão geral":
     else:
         try:
             analysis_for_schedules = rules.analyze(bases[FONTES[2]], bases[FONTES[0]], bases[FONTES[1]]) if not bases[FONTES[2]].empty else None
-            queue = review_queue(bases[FONTES[0]], analysis_for_schedules)
+            queue = review_queue(bases[FONTES[0]], analysis_for_schedules, stays=bases[FONTES[1]])
             schedules = rules.schedule_indicators(bases[FONTES[0]], analysis_for_schedules)
             if not queue.empty:
                 approved_codes = queue.loc[queue["Dentro da regra"], "Monitoramento"]

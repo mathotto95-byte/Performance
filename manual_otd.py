@@ -7,6 +7,7 @@ import pandas as pd
 
 from core import DB_PATH, conectar, exportar
 from rules import schedule_indicators, attendance, text
+MONITORING_LINK_SUPPORTED = True
 
 
 def reviews(path=DB_PATH):
@@ -18,7 +19,7 @@ def reviews(path=DB_PATH):
     return {r[0]: r[1:] for r in rows}
 
 
-def review_queue(ots, analysis, path=DB_PATH):
+def review_queue(ots, analysis, path=DB_PATH, stays=None):
     if ots.empty or "Codigo de Monitoramento" not in ots:
         return pd.DataFrame()
     original = schedule_indicators(ots)
@@ -30,9 +31,17 @@ def review_queue(ots, analysis, path=DB_PATH):
         linked = analysis.loc[analysis.Monitoramento.eq(code)] if analysis is not None and "Monitoramento" in analysis else pd.DataFrame()
         fields = ["Nota Fiscal", "Placa", "Origem", "Destino", "Chegada no Destino", "Correspondência Estadias", "OTD 2"]
         evidence = linked.reindex(columns=fields).fillna("").astype(str).sort_values(["Nota Fiscal", "Placa"]).to_dict("records")
+        if stays is not None and "monitoramento" in stays:
+            matches = stays.loc[stays.monitoramento.map(lambda v: text(v).removesuffix(".0")).eq(text(code).removesuffix(".0"))]
+            if not matches.empty and text(code):
+                mapping = {"nf": "Nota Fiscal", "placa_norm": "Placa", "origem": "Origem", "destino": "Destino", "chegada_destino": "Chegada no Destino", "chegada_origem": "Chegada na Origem", "id": "Registro Estadias", "chave_viagem": "Chave da viagem"}
+                direct = matches.reindex(columns=list(mapping)).rename(columns=mapping).fillna("").astype(str).drop_duplicates()
+                direct["Correspondência Estadias"] = "Código de monitoramento exato — conferir viagem"
+                evidence = direct.sort_values(["Nota Fiscal", "Placa", "Registro Estadias"]).to_dict("records")
         signature = hashlib.sha256(json.dumps([source, evidence], sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
         decision = saved.get(signature, (0, "", "", ""))
         rows.append({**source, "OTD automático": current.loc[code, "OTD"],
+                     **{field: "\n".join(r.get(field, "") or "Sem informação" for r in evidence) for field in ["Nota Fiscal", "Placa", "Origem", "Destino", "Chegada na Origem", "Chegada no Destino", "Registro Estadias"]},
                      "NF / Placa / Chegada no destino": "\n".join(f'{r["Nota Fiscal"]} / {r["Placa"]} / {r["Chegada no Destino"] or "Sem chegada"} / {r["Correspondência Estadias"]}' for r in evidence) or "Sem vínculo NF + placa",
                      "Dentro da regra": bool(decision[0]), "Justificativa": decision[1],
                      "Validado por": decision[2], "Validado em": decision[3], "_assinatura": signature})
@@ -78,7 +87,7 @@ def apply_reviews(analysis, queue):
 def render_reviews(queue, month, user):
     import streamlit as st
     st.subheader("OTD atrasado — análise manual")
-    st.caption("Atrasos pelo agendamento original, incluindo os já validados. A aprovação vale para o monitoramento e suas NFs vinculadas; altera OTD/OTD 2, sem aprovar as outras regras. Alterações na base exigem nova validação.")
+    st.caption("Atrasos pelo agendamento original, incluindo os já validados. NFs, placas e chegadas são buscadas diretamente no Estadias pelo código de monitoramento exato. Múltiplos registros aparecem em linhas correspondentes dentro das células para conferência. A aprovação vale para o monitoramento e suas NFs vinculadas; altera OTD/OTD 2, sem aprovar as outras regras. Alterações na base exigem nova validação.")
     if queue.empty:
         st.info("Nenhum agendamento OTD atrasado na base.")
         return
