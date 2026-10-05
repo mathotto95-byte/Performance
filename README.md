@@ -42,6 +42,8 @@ OTS 2 compara agendamento de carga com previsão. OTS 3 compara chegada na orige
 
 OTD 1 permanece Sem informação: o histórico OTS não comprova o momento real de realização do agendamento. A emissão da NF é extraída exclusivamente de Data Emissão NF, nunca da emissão do CT-e. A tabela apresenta o motivo de cada classificação; registros sem chave única não são associados por aproximação.
 
+Chegadas do rastreador podem ser recuperadas de duplicações com a mesma NF + placa e a mesma `chave_viagem` preenchida, desde que não haja divergências de origem, destino, emissão da NF, monitoramento ou horários. Campos vazios são complementados pelos horários existentes. Esses registros recebem a indicação de viagem duplicada compatível para a validação manual; continuam sem aprovação financeira ou vínculo automático de retorno no Estadias até resolver a duplicidade na origem.
+
 ## Indicadores, painel e retorno ao Estadias
 
 O filtro **Mês de emissão da NF** limita os indicadores, listas e exportações da tela. A lista **Válidas para validação manual — OTS 2 e OTD 2** inclui NFs com ambas as regras dentro do prazo, mantendo visíveis as pendências das demais regras e de correspondência no Estadias. A inclusão nessa lista não aprova a viagem nem confirma cobrança de estadia. A publicação para Estadias continua abrangendo a base completa, independentemente do filtro de mês.

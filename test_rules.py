@@ -1,9 +1,19 @@
 import unittest
 import pandas as pd
-from rules import analyze, compare, prepare_lcte, estadias_payload
+from rules import analyze, compare, prepare_lcte, estadias_payload, resolve_arrival
 
 
 class RulesTest(unittest.TestCase):
+    def test_same_trip_duplicate_arrivals_and_conflicts(self):
+        first = {"chave_viagem": "ABC|20260901|CTE1", "chegada_origem": "2026-09-01 08:00", "chegada_destino": ""}
+        empty = {**first, "chegada_origem": "", "chegada_destino": "2026-09-02 12:00"}
+        resolved = resolve_arrival([first, empty])
+        self.assertEqual(resolved["chegada_origem"], first["chegada_origem"])
+        self.assertEqual(resolved["chegada_destino"], empty["chegada_destino"])
+        for field, value in [("chave_viagem", "other"), ("chave_viagem", ""), ("chegada_origem", "2026-09-01 09:00"), ("chegada_origem", "invalid")]:
+            self.assertEqual(resolve_arrival([first, {**empty, field: value}]), {})
+        self.assertEqual(resolve_arrival([{}, {}]), {})
+
     def test_rules_and_missing_ambiguous_data(self):
         lcte = pd.DataFrame([{"Notas fiscais": "00123", "Placa tração": "ABC-1D23", "Observação": "Monitoramento 9462294", "Data Emissão NF": "01/09/2026"}])
         ots = pd.DataFrame([{"ID": 1, "Codigo de Monitoramento": "9462294", "Data/Hora do Registro": "01/09/2026 08:00", "Previsao Carga": "01/09/2026", "Agendamento Carga": "01/09/2026 12:00", "Data Limite": "03/09/2026", "Agenda GFL": "04/09/2026 08:00"}])

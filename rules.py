@@ -112,6 +112,26 @@ def lcte_from_estadias(payload):
     return pd.DataFrame(result)
 
 
+def resolve_arrival(candidates):
+    if len(candidates) == 1:
+        return candidates[0]
+    # Duplicações só podem compartilhar horários quando identificam a mesma viagem.
+    if not candidates or not text(candidates[0].get("chave_viagem")):
+        return {}
+    for field in ["chave_viagem", "origem", "destino", "data_emissao_nf", "monitoramento"]:
+        values = {text(r.get(field)) for r in candidates if text(r.get(field))}
+        if len(values) > 1 or (field == "chave_viagem" and any(not text(r.get(field)) for r in candidates)):
+            return {}
+    result = {}
+    for field in ["chegada_origem", "chegada_destino"]:
+        values = {text(r.get(field)) for r in candidates if text(r.get(field))}
+        parsed = {date(v) for v in values}
+        if any(pd.isna(v) for v in parsed) or len(parsed) > 1:
+            return {}
+        result[field] = sorted(values)[0] if values else ""
+    return result
+
+
 def analyze(lcte, ots, estadias):
     base = prepare_lcte(lcte)
     schedules = {}
@@ -142,10 +162,12 @@ def analyze(lcte, ots, estadias):
         if not schedule:
             problems.append("monitoramento não localizado ou histórico OTS/OTD inválido")
         candidates = arrivals.get(key, []) if not ambiguous else []
-        arrival = candidates[0] if len(candidates) == 1 else {}
-        item["Correspondência Estadias"] = "Exata" if arrival else "Sem correspondência"
+        arrival = resolve_arrival(candidates)
+        item["Correspondência Estadias"] = ("Exata" if len(candidates) == 1 else "NF + placa exata; viagem duplicada compatível") if arrival else "Sem correspondência"
+        if arrival and len(candidates) > 1:
+            problems.append("chegadas do rastreador recuperadas da mesma chave de viagem; duplicidade pendente de validação no Estadias")
         if not arrival:
-            problems.append("NF + placa sem resultado único no Estadias")
+            problems.append("NF + placa com registros conflitantes ou viagem não comprovada no Estadias" if candidates else "NF + placa não localizada no Estadias")
         for dest, source in [("Previsão de Carga", "Previsao Carga"), ("Agendamento de Carga", "Agendamento Carga"), ("Data Limite", "Data Limite"), ("Agenda GFL", "Agenda GFL")]:
             item[dest] = text(schedule.get(source))
         item["Chegada na Origem"] = text(arrival.get("chegada_origem"))

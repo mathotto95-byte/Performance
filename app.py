@@ -13,7 +13,7 @@ import rules
 from importlib import reload
 
 # Streamlit pode manter o módulo anterior em memória durante a atualização.
-if not hasattr(rules, "indicators") or not hasattr(rules, "lcte_from_estadias"):
+if not hasattr(rules, "indicators") or not hasattr(rules, "resolve_arrival"):
     reload(rules)
 if not hasattr(ots_sync, "_save_snapshot"):
     reload(ots_sync)
