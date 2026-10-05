@@ -13,7 +13,7 @@ import rules
 from importlib import reload
 
 # Streamlit pode manter o módulo anterior em memória durante a atualização.
-if not hasattr(rules, "indicators") or not hasattr(rules, "schedule_indicators"):
+if not hasattr(rules, "indicators") or not hasattr(rules, "otd_deadline"):
     reload(rules)
 if not hasattr(ots_sync, "_save_snapshot"):
     reload(ots_sync)
@@ -204,13 +204,16 @@ elif pagina == "Visão geral":
                 st.info("Aguardando importação.")
             else:
                 st.caption(f"Arquivo: {base.iloc[0].arquivo} • {base.iloc[0].criado_em}")
-    st.subheader("Agendamentos — somente Banco OTS e OTD")
+    st.subheader("Agendamentos — Banco OTS e OTD")
+    st.caption("OTD: Data Limite no domingo permite agendamento até segunda-feira como OK. O mês continua sendo o da Data Limite original.")
+    st.caption("Exceção OTD por chegada: agendamento atrasado passa a OK quando o rastreador comprova chegada no destino até o limite. Sem comprovação, o atraso é mantido. Usa o cruzamento do LCTE com Estadias por NF + placa; todas as NFs vinculadas ao monitoramento precisam atender à exceção.")
     st.caption("Último registro por monitoramento. Comparação por dia, sem horário. Percentuais sobre OK + Antecipado + Atrasado; Sem informação fica fora do cálculo. O mês considera Previsão Carga no OTS e Data Limite no OTD, independentemente do filtro de emissão da NF abaixo.")
     if bases[FONTES[0]].empty:
         st.info("Sincronize OTS e OTD para exibir os cards de agendamentos.")
     else:
         try:
-            schedules = rules.schedule_indicators(bases[FONTES[0]])
+            analysis_for_schedules = analyze(bases[FONTES[2]], bases[FONTES[0]], bases[FONTES[1]]) if not bases[FONTES[2]].empty else None
+            schedules = rules.schedule_indicators(bases[FONTES[0]], analysis_for_schedules)
             if "Mês OTS" not in schedules:
                 reload(rules)
                 schedules = rules.schedule_indicators(bases[FONTES[0]])

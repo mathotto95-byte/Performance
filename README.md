@@ -42,6 +42,10 @@ OTS 2 compara agendamento de carga com previsão. OTS 3 compara chegada na orige
 
 OTD 1 permanece Sem informação: o histórico OTS não comprova o momento real de realização do agendamento. A emissão da NF é extraída exclusivamente de Data Emissão NF, nunca da emissão do CT-e. A tabela apresenta o motivo de cada classificação; registros sem chave única não são associados por aproximação.
 
+Quando a Data Limite do OTD cai no domingo, segunda-feira é aceita até o fim do dia. No resumo OTD, tanto domingo quanto segunda são OK; datas anteriores permanecem Antecipado e terça em diante é Atrasado. A tolerância também é aplicada à OTD 2 e à OTD 3 quando esta usa a Data Limite por ausência de Agenda GFL. O filtro de mês continua baseado na Data Limite original, mesmo quando segunda-feira cai no mês seguinte.
+
+Exceção OTD por chegada: um agendamento atrasado é considerado atendido quando a chegada no destino do rastreador está dentro do limite, incluindo a tolerância de domingo. Não depende de uma marcação de falta de grade. Chegada ausente, conflitante ou tardia mantém o atraso. A análise registra a exceção em coluna própria e no motivo, preservando a Agenda GFL original. O resumo OTD usa essa exceção apenas quando todas as NFs vinculadas ao monitoramento a atendem; sem LCTE/Estadias, continua considerando o agendamento original.
+
 Chegadas do rastreador podem ser recuperadas de duplicações com a mesma NF + placa e a mesma `chave_viagem` preenchida, desde que não haja divergências de origem, destino, emissão da NF, monitoramento ou horários. Campos vazios são complementados pelos horários existentes. Esses registros recebem a indicação de viagem duplicada compatível para a validação manual; continuam sem aprovação financeira ou vínculo automático de retorno no Estadias até resolver a duplicidade na origem.
 
 ## Indicadores, painel e retorno ao Estadias

@@ -24,6 +24,16 @@ def date(value):
     return pd.to_datetime(value, dayfirst=not bool(re.match(r"^\d{4}-\d\d-\d\d", value)), errors="coerce") if value else pd.NaT
 
 
+def otd_deadline(value):
+    parsed = date(value)
+    if pd.notna(parsed):
+        if parsed.tzinfo:
+            parsed = parsed.tz_convert("America/Sao_Paulo")
+        if parsed.weekday() == 6:
+            return (parsed + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    return value
+
+
 def compare(actual, deadline):
     a, b = date(actual), date(deadline)
     if pd.isna(a) or pd.isna(b):
@@ -172,13 +182,23 @@ def analyze(lcte, ots, estadias):
             item[dest] = text(schedule.get(source))
         item["Chegada na Origem"] = text(arrival.get("chegada_origem"))
         item["Chegada no Destino"] = text(arrival.get("chegada_destino"))
+        item["Exceção OTD por chegada"] = False
         for rule, actual, deadline in [
             ("OTS 2", item["Agendamento de Carga"], item["Previsão de Carga"]),
             ("OTS 3", item["Chegada na Origem"], item["Agendamento de Carga"] or item["Previsão de Carga"]),
             ("OTD 2", item["Agenda GFL"], item["Data Limite"]),
             ("OTD 3", item["Chegada no Destino"], item["Agenda GFL"] or item["Data Limite"]),
         ]:
+            if rule == "OTD 2" or (rule == "OTD 3" and not item["Agenda GFL"]):
+                adjusted = otd_deadline(deadline)
+                if adjusted != deadline:
+                    problems.append(f"{rule}: limite no domingo prorrogado para segunda-feira ({adjusted})")
+                deadline = adjusted
             item[rule], reason = compare(actual, deadline)
+            if rule == "OTD 2" and item[rule] == "Fora do prazo" and compare(item["Chegada no Destino"], deadline)[0] == "Dentro do prazo":
+                item[rule] = "Dentro do prazo"
+                item["Exceção OTD por chegada"] = True
+                reason = "agendamento posterior ao limite; atendido pela chegada no destino comprovada pelo rastreador até o limite"
             problems.append(f"{rule}: {reason}")
         # O registro no OTS não prova quando o agendamento efetivamente foi realizado.
         item["OTD 1"] = UNKNOWN
@@ -187,13 +207,13 @@ def analyze(lcte, ots, estadias):
             problems.append("OTD 1: emissão da NF sem horário")
         item["Motivo da classificação"] = "; ".join(problems)
         output.append(item)
-    columns = ["Nota Fiscal", "Placa", "Monitoramento", "Origem", "Destino", "Previsão de Carga", "Agendamento de Carga", "Chegada na Origem", "Emissão da NF", "Data Limite", "Agenda GFL", "Chegada no Destino", *RULES, "Motivo da classificação", "Correspondência Estadias"]
+    columns = ["Nota Fiscal", "Placa", "Monitoramento", "Origem", "Destino", "Previsão de Carga", "Agendamento de Carga", "Chegada na Origem", "Emissão da NF", "Data Limite", "Agenda GFL", "Chegada no Destino", *RULES, "Exceção OTD por chegada", "Motivo da classificação", "Correspondência Estadias"]
     result = pd.DataFrame(output, columns=columns)
     result["Atendeu todas as regras"] = result.apply(attendance, axis=1)
     return result
 
 
-def schedule_indicators(ots):
+def schedule_indicators(ots, analysis=None):
     pairs = {"OTS": ("Agendamento Carga", "Previsao Carga"), "OTD": ("Agenda GFL", "Data Limite")}
     required = {"Codigo de Monitoramento", "Data/Hora do Registro", "ID", *[c for pair in pairs.values() for c in pair]}
     if not required.issubset(ots.columns):
@@ -215,8 +235,16 @@ def schedule_indicators(ots):
                 a = a.tz_convert("America/Sao_Paulo") if a.tzinfo else a
                 b = b.tz_convert("America/Sao_Paulo") if b.tzinfo else b
                 result[name] = "OK" if a.date() == b.date() else "Antecipado" if a.date() < b.date() else "Atrasado"
+                if name == "OTD" and b.weekday() == 6 and b.date() <= a.date() <= date(otd_deadline(row[limit])).date():
+                    result[name] = "OK"
         rows.append(result)
-    return pd.DataFrame(rows, columns=["Monitoramento", "OTS", "OTD", "Mês OTS", "Mês OTD"])
+    result = pd.DataFrame(rows, columns=["Monitoramento", "OTS", "OTD", "Mês OTS", "Mês OTD"])
+    if analysis is not None and not analysis.empty and "Exceção OTD por chegada" in analysis:
+        for code, group in analysis.groupby("Monitoramento"):
+            if not text(code) or not group["Exceção OTD por chegada"].eq(True).all():
+                continue
+            result.loc[result.Monitoramento.eq(code) & result.OTD.eq("Atrasado"), "OTD"] = "OK"
+    return result
 
 
 def attendance(row):
