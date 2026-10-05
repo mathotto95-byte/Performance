@@ -8,6 +8,7 @@ import pandas as pd
 from core import DB_PATH, conectar, exportar
 from rules import schedule_indicators, attendance, text
 MONITORING_LINK_SUPPORTED = True
+VIGENCIA_PREVISAO = True
 
 
 def reviews(path=DB_PATH):
@@ -91,8 +92,8 @@ def render_reviews(queue, month, user):
     if queue.empty:
         st.info("Nenhum agendamento OTD atrasado na base.")
         return
-    selected = queue if month == "Todos" else queue.loc[queue["Mês OTD"].eq(month)]
-    view = selected.drop(columns=["_assinatura", "OTS", "OTD", "Mês OTS"], errors="ignore")
+    selected = queue if month == "Todos" else queue.loc[queue["Mês OTS"].eq(month)]
+    view = selected.drop(columns=["_assinatura", "OTS", "OTD", "Mês OTD"], errors="ignore").rename(columns={"Mês OTS": "Mês de vigência"})
     st.metric("OTD validados manualmente no período", int(selected["Dentro da regra"].sum()))
     with st.form("otd_review_form"):
         allowed = user.get("role") in {"ADMIN", "OPERACIONAL"}

@@ -8,7 +8,7 @@ from reporting import control_panel, panel_totals, money, publish
 
 
 class ReportingTests(unittest.TestCase):
-    def test_schedule_month_filters_ots_and_otd_by_their_deadlines(self):
+    def test_schedule_month_uses_forecast_for_both_rules_and_manual_list(self):
         from streamlit.testing.v1 import AppTest
         from core import FONTES
         history = pd.DataFrame([{"id": 1, "fonte": FONTES[0], "arquivo": "teste", "criado_em": "2026-10-05", "quantidade": 1}])
@@ -22,11 +22,11 @@ class ReportingTests(unittest.TestCase):
             self.assertFalse(app.exception)
             app.selectbox(key="schedule_month").select("2026-09").run()
             self.assertFalse(app.exception)
-            self.assertEqual([m.value for m in app.metric if m.label == "Total analisado"], ["1", "0"])
-            app.selectbox(key="schedule_month").select("2026-10").run()
-            self.assertFalse(app.exception)
-            self.assertEqual([m.value for m in app.metric if m.label == "Total analisado"], ["0", "1"])
+            self.assertEqual([m.value for m in app.metric if m.label == "Total analisado"], ["1", "1"])
+            self.assertNotIn("2026-10", app.selectbox(key="schedule_month").options)
             self.assertEqual(next(m.value for m in app.metric if m.label == "OTD Atrasado"), "1")
+            manual_table = next(d.value for d in app.dataframe if "Mês de vigência" in d.value.columns)
+            self.assertEqual(manual_table["Mês de vigência"].tolist(), ["2026-09"])
 
     def test_overview_rule_cards_month_and_unknown_denominator(self):
         from streamlit.testing.v1 import AppTest

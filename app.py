@@ -22,7 +22,7 @@ from ots_sync import settings as ots_settings, sync as sync_ots, status as ots_s
 from rules import prepare_lcte, indicators
 from reporting import control_panel, render_panel, publish
 import manual_otd
-if not hasattr(manual_otd, "MONITORING_LINK_SUPPORTED"):
+if not hasattr(manual_otd, "VIGENCIA_PREVISAO"):
     reload(manual_otd)
 from manual_otd import review_queue, apply_reviews, render_reviews
 
@@ -214,9 +214,9 @@ elif pagina == "Visão geral":
             else:
                 st.caption(f"Arquivo: {base.iloc[0].arquivo} • {base.iloc[0].criado_em}")
     st.subheader("Agendamentos — Banco OTS e OTD")
-    st.caption("OTD: Data Limite no domingo permite agendamento até segunda-feira como OK. O mês continua sendo o da Data Limite original.")
+    st.caption("OTD: Data Limite no domingo permite agendamento até segunda-feira como OK. A vigência é definida pela Previsão de Carga.")
     st.caption("Exceção OTD por chegada: agendamento atrasado passa a OK quando o rastreador comprova chegada no destino até o limite. Sem comprovação, o atraso é mantido. Usa o cruzamento do LCTE com Estadias por NF + placa; todas as NFs vinculadas ao monitoramento precisam atender à exceção.")
-    st.caption("Último registro por monitoramento. Comparação por dia, sem horário. Percentuais sobre OK + Antecipado + Atrasado; Sem informação fica fora do cálculo. O mês considera Previsão Carga no OTS e Data Limite no OTD, independentemente do filtro de emissão da NF abaixo.")
+    st.caption("Último registro por monitoramento. Comparação por dia, sem horário. Percentuais sobre OK + Antecipado + Atrasado; Sem informação fica fora do cálculo. O mês de vigência usa Previsão de Carga para OTS, OTD e análise manual, independentemente do filtro de emissão da NF abaixo.")
     if bases[FONTES[0]].empty:
         st.info("Sincronize OTS e OTD para exibir os cards de agendamentos.")
     else:
@@ -230,11 +230,11 @@ elif pagina == "Visão geral":
             if "Mês OTS" not in schedules:
                 reload(rules)
                 schedules = rules.schedule_indicators(bases[FONTES[0]])
-            months = sorted(set(schedules["Mês OTS"]) | set(schedules["Mês OTD"]), reverse=True)
-            schedule_month = st.selectbox("Mês dos indicadores OTS/OTD", ["Todos", *months], key="schedule_month")
+            months = sorted(set(schedules["Mês OTS"]), reverse=True)
+            schedule_month = st.selectbox("Mês de vigência — Previsão de Carga", ["Todos", *months], key="schedule_month")
             for name, description in [("OTS", "Agendamento Carga × Previsão Carga"), ("OTD", "Agenda GFL × Data Limite")]:
                 st.subheader(f"{name} — {description}")
-                selected = schedules if schedule_month == "Todos" else schedules.loc[schedules[f"Mês {name}"].eq(schedule_month)]
+                selected = schedules if schedule_month == "Todos" else schedules.loc[schedules["Mês OTS"].eq(schedule_month)]
                 counts = selected[name].value_counts()
                 total = int(selected[name].ne(rules.UNKNOWN).sum())
                 cards = st.columns(5)
