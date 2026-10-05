@@ -8,6 +8,26 @@ from reporting import control_panel, panel_totals, money, publish
 
 
 class ReportingTests(unittest.TestCase):
+    def test_schedule_month_filters_ots_and_otd_by_their_deadlines(self):
+        from streamlit.testing.v1 import AppTest
+        from core import FONTES
+        history = pd.DataFrame([{"id": 1, "fonte": FONTES[0], "arquivo": "teste", "criado_em": "2026-10-05", "quantidade": 1}])
+        source = pd.DataFrame([{"ID": 1, "Codigo de Monitoramento": "1234567", "Data/Hora do Registro": "01/10/2026", "Previsao Carga": "30/09/2026", "Agendamento Carga": "30/09/2026", "Data Limite": "01/10/2026", "Agenda GFL": "02/10/2026"}])
+        with patch("core.historico", return_value=history), patch("core.carregar", return_value=source), patch("ots_sync.status", return_value=None):
+            app = AppTest.from_file("app.py", default_timeout=30)
+            app.session_state["authenticated"] = True
+            app.session_state["auth_user"] = {"username": "teste", "name": "Teste", "role": "CONSULTA"}
+            app.session_state["performance_menu"] = "Visão geral"
+            app.run()
+            self.assertFalse(app.exception)
+            app.selectbox(key="schedule_month").select("2026-09").run()
+            self.assertFalse(app.exception)
+            self.assertEqual([m.value for m in app.metric if m.label == "Total analisado"], ["1", "0"])
+            app.selectbox(key="schedule_month").select("2026-10").run()
+            self.assertFalse(app.exception)
+            self.assertEqual([m.value for m in app.metric if m.label == "Total analisado"], ["0", "1"])
+            self.assertEqual(next(m.value for m in app.metric if m.label == "OTD Atrasado"), "1")
+
     def test_overview_rule_cards_month_and_unknown_denominator(self):
         from streamlit.testing.v1 import AppTest
         from core import FONTES

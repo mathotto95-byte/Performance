@@ -205,16 +205,22 @@ elif pagina == "Visão geral":
             else:
                 st.caption(f"Arquivo: {base.iloc[0].arquivo} • {base.iloc[0].criado_em}")
     st.subheader("Agendamentos — somente Banco OTS e OTD")
-    st.caption("Último registro por monitoramento. Comparação por dia, sem horário. Percentuais sobre OK + Antecipado + Atrasado; Sem informação fica fora do cálculo. Este resumo usa toda a base OTS/OTD e não depende do LCTE ou do filtro de emissão da NF abaixo.")
+    st.caption("Último registro por monitoramento. Comparação por dia, sem horário. Percentuais sobre OK + Antecipado + Atrasado; Sem informação fica fora do cálculo. O mês considera Previsão Carga no OTS e Data Limite no OTD, independentemente do filtro de emissão da NF abaixo.")
     if bases[FONTES[0]].empty:
         st.info("Sincronize OTS e OTD para exibir os cards de agendamentos.")
     else:
         try:
             schedules = rules.schedule_indicators(bases[FONTES[0]])
+            if "Mês OTS" not in schedules:
+                reload(rules)
+                schedules = rules.schedule_indicators(bases[FONTES[0]])
+            months = sorted(set(schedules["Mês OTS"]) | set(schedules["Mês OTD"]), reverse=True)
+            schedule_month = st.selectbox("Mês dos indicadores OTS/OTD", ["Todos", *months], key="schedule_month")
             for name, description in [("OTS", "Agendamento Carga × Previsão Carga"), ("OTD", "Agenda GFL × Data Limite")]:
                 st.subheader(f"{name} — {description}")
-                counts = schedules[name].value_counts()
-                total = int(schedules[name].ne(rules.UNKNOWN).sum())
+                selected = schedules if schedule_month == "Todos" else schedules.loc[schedules[f"Mês {name}"].eq(schedule_month)]
+                counts = selected[name].value_counts()
+                total = int(selected[name].ne(rules.UNKNOWN).sum())
                 cards = st.columns(5)
                 cards[0].metric("Total analisado", total)
                 for card, status in zip(cards[1:4], ["OK", "Antecipado", "Atrasado"]):

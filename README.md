@@ -46,7 +46,7 @@ Chegadas do rastreador podem ser recuperadas de duplicações com a mesma NF + p
 
 ## Indicadores, painel e retorno ao Estadias
 
-Na **Visão geral**, os cards **Agendamentos — somente Banco OTS e OTD** independem do LCTE e do Estadias. Usam o último registro por monitoramento: OTS compara Agendamento Carga com Previsão Carga; OTD compara Agenda GFL com Data Limite. Mesmo dia = OK, antes = Antecipado, depois = Atrasado. Horários não alteram essa classificação. Cada status tem quantidade e percentual sobre os registros analisáveis; datas ausentes/inválidas ficam Sem informação. Esses cards usam toda a base OTS/OTD, independentemente do filtro de mês de emissão da NF aplicado às cinco regras de estadia.
+Na **Visão geral**, os cards **Agendamentos — somente Banco OTS e OTD** independem do LCTE e do Estadias. Usam o último registro por monitoramento: OTS compara Agendamento Carga com Previsão Carga; OTD compara Agenda GFL com Data Limite. Mesmo dia = OK, antes = Antecipado, depois = Atrasado. Horários não alteram essa classificação. Cada status tem quantidade e percentual sobre os registros analisáveis; datas ausentes/inválidas ficam Sem informação. O filtro Mês dos indicadores OTS/OTD usa Previsão Carga no OTS e Data Limite no OTD. Todos exibe a base completa; Sem data reúne referências ausentes ou inválidas. Esse filtro é independente do mês de emissão da NF aplicado às cinco regras de estadia.
 
 O filtro **Mês de emissão da NF** limita os indicadores, listas e exportações da tela. A lista **Válidas para validação manual — OTS 2 e OTD 2** inclui NFs com ambas as regras dentro do prazo, mantendo visíveis as pendências das demais regras e de correspondência no Estadias. A inclusão nessa lista não aprova a viagem nem confirma cobrança de estadia. A publicação para Estadias continua abrangendo a base completa, independentemente do filtro de mês.
 
@@ -109,3 +109,4 @@ role = "OPERACIONAL"
 Também aceita `password_hash` no formato PBKDF2-SHA256 ou bcrypt, e as variáveis `AUTH_ADMIN_PASSWORD` / `AUTH_USERS_JSON` do Controle Integrado. Não existe senha padrão. Credenciais e usuários do banco do Controle Integrado não são copiados automaticamente; configure os acessos neste aplicativo. Não publique senhas no GitHub.
 
 ADMIN e OPERACIONAL podem importar. CONSULTA acessa visualização, histórico e exportação. Há bloqueio de cinco minutos após cinco falhas na sessão, expiração após 60 minutos de inatividade (verificada na próxima interação), botão Sair e registro de eventos de acesso no banco próprio. O bloqueio de tentativas segue o Controle Integrado e é limitado à sessão do navegador.
+

@@ -207,13 +207,16 @@ def schedule_indicators(ots):
         result = {"Monitoramento": text(code)}
         for name, (actual, limit) in pairs.items():
             a, b = date(row[actual]), date(row[limit])
+            if pd.notna(b) and b.tzinfo:
+                b = b.tz_convert("America/Sao_Paulo")
+            result[f"Mês {name}"] = b.strftime("%Y-%m") if pd.notna(b) else "Sem data"
             result[name] = UNKNOWN
             if valid and pd.notna(a) and pd.notna(b):
                 a = a.tz_convert("America/Sao_Paulo") if a.tzinfo else a
                 b = b.tz_convert("America/Sao_Paulo") if b.tzinfo else b
                 result[name] = "OK" if a.date() == b.date() else "Antecipado" if a.date() < b.date() else "Atrasado"
         rows.append(result)
-    return pd.DataFrame(rows, columns=["Monitoramento", "OTS", "OTD"])
+    return pd.DataFrame(rows, columns=["Monitoramento", "OTS", "OTD", "Mês OTS", "Mês OTD"])
 
 
 def attendance(row):

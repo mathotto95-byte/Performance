@@ -11,6 +11,8 @@ class RulesTest(unittest.TestCase):
         rows.append({**rows[0], "ID": 99, "Data/Hora do Registro": "31/08/2026 10:00", "Agendamento Carga": "10/09/2026"})
         result = schedule_indicators(pd.DataFrame(rows))
         self.assertEqual(len(result), 4)
+        self.assertEqual(result["Mês OTS"].tolist(), ["2026-09"] * 4)
+        self.assertEqual(result["Mês OTD"].tolist(), ["2026-09"] * 4)
         for rule in ["OTS", "OTD"]:
             self.assertEqual(result[rule].tolist(), ["OK", "Antecipado", "Atrasado", "Sem informação"])
 
