@@ -12,7 +12,8 @@ from rules import RULES, UNKNOWN, date, text
 
 RESULT_PATH = "backups/performance_latest.json"
 RESULT_URL = f"https://api.github.com/repos/mathotto95-byte/Performance/contents/{RESULT_PATH}"
-PANEL_COLUMNS = ["Tarefa", "Envio", "Prazo", "Nota", "Código", "Placa", "Origem", "Destino", "Horário de Início da Estadia", "Horário de Fim da Estadia", "Horas de Estadia", "Valor", "Dentro da Regra"]
+SCHEDULE_COLUMNS = ["Previsão de Carga", "Agendamento de Carga", "Data Limite", "Agenda GFL"]
+PANEL_COLUMNS = ["Tarefa", "Envio", "Prazo", "Nota", "Código", "Placa", "Origem", "Destino", *SCHEDULE_COLUMNS, "Horário de Início da Estadia", "Horário de Fim da Estadia", "Horas de Estadia", "Valor", "Dentro da Regra"]
 
 
 def money(hours):
@@ -49,6 +50,7 @@ def control_panel(result, stays):
                              "Prazo": sent + pd.Timedelta(days=15) if pd.notna(sent) else pd.NaT,
                              "Nota": nf, "Código": code, "Placa": plate,
                              "Origem": text(stay.get("origem")), "Destino": text(stay.get("destino")),
+                             **{column: text(analysis.get(column)) for column in SCHEDULE_COLUMNS},
                              "Horário de Início da Estadia": start, "Horário de Fim da Estadia": end,
                              "Horas de Estadia": hours, "Valor": money(hours) if hours is not None else None,
                              "Dentro da Regra": analysis.get("Atendeu todas as regras", UNKNOWN) if exact else UNKNOWN,

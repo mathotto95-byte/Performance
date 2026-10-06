@@ -103,9 +103,14 @@ class ReportingTests(unittest.TestCase):
 
     def test_period_value_deadline_and_duplicate_nf(self):
         analysis = pd.DataFrame([{"Nota Fiscal": nf, "Placa": "ABC1D23", "Correspondência Estadias": "Exata", "Atendeu todas as regras": "Sim"} for nf in ["1", "2"]])
+        for field, value in {"Previsão de Carga": "01/10/2026", "Agendamento de Carga": "01/10/2026 08:00", "Data Limite": "02/10/2026", "Agenda GFL": "02/10/2026 10:00"}.items():
+            analysis[field] = value
         stays = pd.DataFrame([{"id": 7, "nf": "1;2", "placa_norm": "ABC1D23", "analise_enviada_em": "2026-10-01", "chegada_origem": "2026-10-01 08:00", "saida_origem": "2026-10-01 19:30", "franquia_carga_min": 60, "estadia_carga_min": 630}])
         panel = control_panel(analysis, stays)
         self.assertEqual(panel.iloc[0]["Horas de Estadia"], 10.5)
+        for field in ["Previsão de Carga", "Agendamento de Carga", "Data Limite", "Agenda GFL"]:
+            self.assertEqual(panel.iloc[0][field], analysis.iloc[0][field])
+        self.assertEqual(panel.iloc[0]["Dentro da Regra"], "Sim")
         self.assertEqual(panel.iloc[0].Prazo, pd.Timestamp("2026-10-16"))
         self.assertEqual(panel_totals(panel)["Valor total"], 714)
         self.assertEqual(money(10), 680)

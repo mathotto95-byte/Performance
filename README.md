@@ -66,6 +66,25 @@ Em **Análise Performance**, os percentuais usam somente Dentro + Fora. O total 
 
 O **Painel de Controle** reutiliza os períodos por origem/destino e o identificador do registro Estadias. Início é chegada + franquia; fim é saída. Horas são calculadas sem arredondamento para inteiro e Valor é horas × R$ 68,00, arredondado somente para centavos. Totais financeiros contam cada período uma única vez, mesmo com várias notas. Tarefa fica vazia quando não há campo de tarefa na origem. Envio usa `analise_enviada_em`; Prazo é Envio + 15 dias corridos. Prazo vencido considera a data atual em São Paulo, sem vencer antecipadamente no próprio dia.
 
+O painel e sua exportação incluem **Previsão de Carga**, **Agendamento de Carga**, **Data Limite**, **Agenda GFL** e **Dentro da Regra**, além da classificação individual das cinco regras, reaproveitando a análise vigente.
+
+## Backup diário às 20h
+
+O menu **Backup** mostra a situação do agendamento e permite **Fazer backup agora**. O banco SQLite completo, incluindo importações, sincronizações, validações OTD e histórico, é copiado com a API de backup do SQLite e verificado antes do envio. Secrets, senhas e tokens de configuração não estão no banco e não são incluídos.
+
+Destino privado: `mathotto95-byte/Performance-backups`, branch `main`. Mantém dois arquivos fixos: `backups/performance_1.zip` e `backups/performance_2.zip`. Na primeira execução há uma cópia; na seguinte, duas; depois cada envio substitui a mais antiga. O histórico de commits do GitHub não é apagado. Cada ZIP inclui o banco `regras_estadia.sqlite3` e um manifesto com data/hora e SHA-256. Para recuperação, extraia o banco e substitua o arquivo local com o aplicativo parado.
+
+O token já usado em `performance_publish.token` ou na sincronização OTS é reutilizado se possuir **Contents: Read and write** no repositório privado. Se for restrito a repositórios selecionados, inclua `Performance-backups` entre eles. Alternativamente:
+
+```toml
+[performance_backup]
+token = "SEU_TOKEN_COM_ESCRITA_NO_REPOSITORIO_PRIVADO"
+repository = "mathotto95-byte/Performance-backups"
+branch = "main"
+```
+
+O agendador inicia ao acessar o Performance autenticado e continua no processo do servidor às **20h de Brasília**. Se o Streamlit estiver suspenso, verifica o backup pendente quando o aplicativo voltar e copia os dados então disponíveis; não reconstrói dados perdidos durante a suspensão. Falhas de rede/permissão têm nova tentativa a cada 15 minutos. Banco vazio ou inválido nunca substitui as cópias anteriores, e o envio é bloqueado para repositório público. O backup não depende de manter o computador do usuário ligado.
+
 O Estadias publica os envios nos próximos backups, sem mudar tabelas. Sincronize novamente depois desse backup. Por padrão, sua sincronização usa a branch `backup-data`; para outro destino, configure `branch` em `[estadias_sync]`.
 
 Para devolver o resultado, em Análise Performance clique **Publicar resultado para Estadias**. O arquivo `backups/performance_latest.json` é gravado na branch main do Performance com data da análise, motivos e identificação das bases. Configure um token com Contents: Read and write no repositório Performance:

@@ -20,7 +20,11 @@ if not hasattr(ots_sync, "_save_snapshot"):
 
 from ots_sync import settings as ots_settings, sync as sync_ots, status as ots_status
 from rules import prepare_lcte, indicators
+import reporting
+if "Previsão de Carga" not in reporting.PANEL_COLUMNS:
+    reload(reporting)
 from reporting import control_panel, render_panel, publish
+import backup
 import manual_otd
 if not hasattr(manual_otd, "VIGENCIA_PREVISAO"):
     reload(manual_otd)
@@ -38,6 +42,8 @@ st.set_page_config(page_title="Performance RW", page_icon=str(LOGO_PATH), layout
 apply_theme()
 if not enforce_authentication():
     st.stop()
+backup_config = backup.settings()
+backup.start_scheduler(backup_config)
 logo, titulo, atualizar = st.columns([1.2, 4, 1])
 with logo:
     with st.container(key="rw-logo"):
@@ -59,6 +65,7 @@ st.sidebar.write(f"**Usuário:** {usuario['name']}")
 st.sidebar.write(f"**Perfil:** {usuario['role'].title()}")
 menu = ["Visão geral", "Análise Performance", "Painel de Controle", "Consultar resultados", "Histórico"]
 if usuario['role'] in {"ADMIN", "OPERACIONAL"}:
+    menu.append("Backup")
     menu.insert(1, "Importações")
     menu.insert(1, "Sincronização OTS e OTD")
     menu.insert(2, "Sincronização Estadias")
@@ -276,6 +283,9 @@ elif pagina == "Visão geral":
             st.caption("Sem registros analisáveis, o percentual aparece como —. Os detalhes estão em Análise Performance.")
         except ValueError as exc:
             st.error(str(exc))
+
+elif pagina == "Backup":
+    backup.render(backup_config)
 
 elif pagina == "Importações":
     fonte = st.selectbox("Base de destino", FONTES)
