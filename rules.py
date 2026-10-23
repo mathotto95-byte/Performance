@@ -25,14 +25,17 @@ def date(value):
     return pd.to_datetime(value, dayfirst=not bool(re.match(r"^\d{4}-\d\d-\d\d", value)), errors="coerce") if value else pd.NaT
 
 
-def otd_deadline(value):
-    parsed = date(value)
-    if pd.notna(parsed):
-        if parsed.tzinfo:
-            parsed = parsed.tz_convert("America/Sao_Paulo")
-        if parsed.weekday() == 6:
-            return (parsed + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    return value
+def sunday_arrival(arrival, deadline):
+    limit, reached = date(deadline), date(arrival)
+    if pd.isna(limit):
+        return None
+    limit = limit.tz_convert("America/Sao_Paulo") if limit.tzinfo else limit
+    if limit.weekday() != 6:
+        return None
+    if pd.isna(reached):
+        return False
+    reached = reached.tz_convert("America/Sao_Paulo") if reached.tzinfo else reached
+    return reached.date() == limit.date()
 
 
 def compare(actual, deadline):
@@ -53,6 +56,43 @@ def compare(actual, deadline):
             b = b.tz_convert("America/Sao_Paulo").tz_localize(None)
         late = a > b
     return ("Fora do prazo", "posterior ao limite") if late else ("Dentro do prazo", "até o limite")
+
+
+def compare_destination_day(arrival, deadline):
+    reached, limit = date(arrival), date(deadline)
+    if pd.isna(reached) or pd.isna(limit):
+        return UNKNOWN, "chegada no destino ou Data Limite ausente ou inválida"
+    reached = reached.tz_convert("America/Sao_Paulo") if reached.tzinfo else reached
+    limit = limit.tz_convert("America/Sao_Paulo") if limit.tzinfo else limit
+    same_day = reached.date() == limit.date()
+    return ("Dentro do prazo" if same_day else "Fora do prazo",
+            f"chegada no destino {reached:%d/%m/%Y} {'na' if same_day else 'fora da'} Data Limite {limit:%d/%m/%Y}")
+
+
+def compare_not_early(actual, deadline):
+    """Dentro quando o evento ocorre no mesmo dia ou depois do limite."""
+    a, b = date(actual), date(deadline)
+    if pd.isna(a) or pd.isna(b):
+        return UNKNOWN, "data ausente ou inválida"
+    if a.tzinfo:
+        a = a.tz_convert("America/Sao_Paulo")
+    if b.tzinfo:
+        b = b.tz_convert("America/Sao_Paulo")
+    inside = a.date() >= b.date()
+    return ("Dentro do prazo", "no mesmo dia ou posterior ao limite") if inside else ("Fora do prazo", "antecipado ao limite")
+
+
+def compare_otd3(arrival, agenda, deadline):
+    agenda_date, deadline_date = date(agenda), date(deadline)
+    if pd.isna(agenda_date) or pd.isna(deadline_date):
+        return UNKNOWN, "Agenda GFL ou Data Limite ausente ou inválida"
+    agenda_date = agenda_date.tz_convert("America/Sao_Paulo") if agenda_date.tzinfo else agenda_date
+    deadline_date = deadline_date.tz_convert("America/Sao_Paulo") if deadline_date.tzinfo else deadline_date
+    if agenda_date.date() == deadline_date.date():
+        return compare(arrival, agenda)
+    if agenda_date > deadline_date:
+        return compare_destination_day(arrival, deadline)
+    return compare(arrival, agenda)
 
 
 def prepare_lcte(df):
@@ -188,24 +228,25 @@ def analyze(lcte, ots, estadias):
             ("OTS 2", item["Agendamento de Carga"], item["Previsão de Carga"]),
             ("OTS 3", item["Chegada na Origem"], item["Agendamento de Carga"] or item["Previsão de Carga"]),
             ("OTD 2", item["Agenda GFL"], item["Data Limite"]),
-            ("OTD 3", item["Chegada no Destino"], item["Agenda GFL"] or item["Data Limite"]),
+            ("OTD 3", item["Chegada no Destino"], item["Data Limite"]),
         ]:
-            if rule == "OTD 2" or (rule == "OTD 3" and not item["Agenda GFL"]):
-                adjusted = otd_deadline(deadline)
-                if adjusted != deadline:
-                    problems.append(f"{rule}: limite no domingo prorrogado para segunda-feira ({adjusted})")
-                deadline = adjusted
-            item[rule], reason = compare(actual, deadline)
-            if rule == "OTD 2" and item[rule] == "Fora do prazo" and compare(item["Chegada no Destino"], deadline)[0] == "Dentro do prazo":
-                item[rule] = "Dentro do prazo"
-                item["Exceção OTD por chegada"] = True
-                reason = "agendamento posterior ao limite; atendido pela chegada no destino comprovada pelo rastreador até o limite"
+            if rule in {"OTS 2", "OTD 2"}:
+                item[rule], reason = compare_not_early(actual, deadline)
+            elif rule == "OTD 3":
+                item[rule], reason = compare_otd3(actual, item["Agenda GFL"], deadline)
+            else:
+                item[rule], reason = compare(actual, deadline)
             problems.append(f"{rule}: {reason}")
-        # O registro no OTS não prova quando o agendamento efetivamente foi realizado.
+        registered = date(schedule.get("Data/Hora do Registro"))
+        issued = date(item["Emissão da NF"])
         item["OTD 1"] = UNKNOWN
-        problems.append("OTD 1: falta data/hora comprovada de realização do agendamento do destino")
-        if not re.search(r"\d{1,2}:\d{2}", item["Emissão da NF"]):
-            problems.append("OTD 1: emissão da NF sem horário")
+        if pd.isna(registered) or pd.isna(issued):
+            problems.append("OTD 1: Data/Hora do Registro ou Data Emissão NF ausente, inválida ou sem vínculo único")
+        else:
+            registered_day = (registered.tz_convert("America/Sao_Paulo") if registered.tzinfo else registered).date()
+            issued_day = (issued.tz_convert("America/Sao_Paulo") if issued.tzinfo else issued).date()
+            item["OTD 1"] = "Dentro do prazo" if registered_day == issued_day else "Fora do prazo"
+            problems.append(f"OTD 1: data do registro {registered_day:%d/%m/%Y} {'igual à' if registered_day == issued_day else 'diferente da'} emissão da NF {issued_day:%d/%m/%Y}")
         item["Motivo da classificação"] = "; ".join(problems)
         output.append(item)
     columns = ["Nota Fiscal", "Placa", "Monitoramento", "Origem", "Destino", "Previsão de Carga", "Agendamento de Carga", "Chegada na Origem", "Emissão da NF", "Data Limite", "Agenda GFL", "Chegada no Destino", *RULES, "Exceção OTD por chegada", "Motivo da classificação", "Correspondência Estadias"]
@@ -235,9 +276,10 @@ def schedule_indicators(ots, analysis=None):
             if valid and pd.notna(a) and pd.notna(b):
                 a = a.tz_convert("America/Sao_Paulo") if a.tzinfo else a
                 b = b.tz_convert("America/Sao_Paulo") if b.tzinfo else b
-                result[name] = "OK" if a.date() == b.date() else "Antecipado" if a.date() < b.date() else "Atrasado"
-                if name == "OTD" and b.weekday() == 6 and b.date() <= a.date() <= date(otd_deadline(row[limit])).date():
+                if a.date() == b.date() or (b.weekday() == 6 and (a.date() - b.date()).days == 1):
                     result[name] = "OK"
+                else:
+                    result[name] = "Antecipado" if a.date() < b.date() else "Atrasado"
         rows.append(result)
     result = pd.DataFrame(rows, columns=list(dict.fromkeys(["Monitoramento", *ots.columns, "OTS", "OTD", "Mês OTS", "Mês OTD"])))
     if analysis is not None and not analysis.empty and "Exceção OTD por chegada" in analysis:
@@ -273,8 +315,14 @@ def indicators(result):
                      "% Fora": outside * 100 / total if total else None})
     table = pd.DataFrame(rows)
     total = int(table["Total analisado"].sum())
+    groups = {"OTS": ["OTS 2", "OTS 3"], "OTD": ["OTD 1", "OTD 2", "OTD 3"], "OTS e OTD": RULES}
+    group_percentages = {}
+    for name, rules in groups.items():
+        complete = result[rules].ne(UNKNOWN).all(axis=1)
+        group_percentages[f"{name} %"] = float(result.loc[complete, rules].eq("Dentro do prazo").all(axis=1).mean() * 100) if complete.any() else None
     general = {"Viagens/NFs": len(result), "Regras analisadas": total,
                "Dentro": int(table["Dentro do prazo"].sum()), "Fora": int(table["Fora do prazo"].sum()),
                "Sem informação": int(table["Sem informação"].sum()),
-               "Conformidade %": table["Dentro do prazo"].sum() * 100 / total if total else None}
+               "Conformidade %": table["Dentro do prazo"].sum() * 100 / total if total else None,
+               **group_percentages}
     return table, general

@@ -19,7 +19,7 @@ if not hasattr(ots_sync, "_save_snapshot"):
     reload(ots_sync)
 
 from ots_sync import settings as ots_settings, sync as sync_ots, status as ots_status
-from rules import prepare_lcte, indicators
+from rules import prepare_lcte, indicators, schedule_indicators
 import reporting
 if "Previsão de Carga" not in reporting.PANEL_COLUMNS:
     reload(reporting)
@@ -63,7 +63,7 @@ st.sidebar.caption("Gestão operacional • RW")
 usuario = current_user()
 st.sidebar.write(f"**Usuário:** {usuario['name']}")
 st.sidebar.write(f"**Perfil:** {usuario['role'].title()}")
-menu = ["Visão geral", "Análise Performance", "Painel de Controle", "Consultar resultados", "Histórico"]
+menu = ["Performance IPP", "Visão geral", "Análise Performance", "Painel de Controle", "Consultar resultados", "Histórico"]
 if usuario['role'] in {"ADMIN", "OPERACIONAL"}:
     menu.append("Backup")
     menu.insert(1, "Importações")
@@ -77,10 +77,33 @@ st.sidebar.caption("Bases: OTS e OTD / Estadia")
 st.divider()
 hist = historico()
 
-if pagina in {"Análise Performance", "Painel de Controle"}:
+if pagina == "Performance IPP":
+    st.subheader("Performance IPP")
+    st.caption("Indicador exclusivo das regras OTS e OTD. Antecipados são contabilizados junto com OK.")
+    estado = ots_status(fonte=FONTES[0])
+    if not estado:
+        st.info("Sincronize ou importe a base de Resultados da OTS e OTD para gerar o relatório.")
+    else:
+        try:
+            ipp = schedule_indicators(carregar(estado[0]))
+            if ipp.empty:
+                st.info("Nenhum monitoramento analisável foi encontrado.")
+            else:
+                cards = st.columns(3)
+                total = int(ipp[["OTS", "OTD"]].isin(["OK", "Antecipado", "Atrasado"]).sum().sum())
+                for card, label, status in zip(cards, ["OK", "Atrasado", "Sem informação"], [["OK", "Antecipado"], ["Atrasado"], ["Sem informação"]]):
+                    quantidade = int(ipp[["OTS", "OTD"]].isin(status).sum().sum())
+                    card.metric(label, quantidade, f"{quantidade / total * 100:.2f}%" if total else None)
+                resumo = pd.DataFrame({"Indicador": ["OTS", "OTD"], "OK (inclui antecipado)": [int(ipp.OTS.isin(["OK", "Antecipado"]).sum()), int(ipp.OTD.isin(["OK", "Antecipado"]).sum())], "Atrasado": [int(ipp.OTS.eq("Atrasado").sum()), int(ipp.OTD.eq("Atrasado").sum())], "Sem informação": [int(ipp.OTS.eq("Sem informação").sum()), int(ipp.OTD.eq("Sem informação").sum())]})
+                st.dataframe(resumo, hide_index=True, use_container_width=True)
+                st.download_button("Exportar Performance IPP", exportar(ipp), "performance_ipp.xlsx")
+        except ValueError as exc:
+            st.error(str(exc))
+
+elif pagina in {"Análise Performance", "Painel de Controle"}:
     st.subheader("Performance por NF + Placa")
     st.caption("Observação do LCTE → monitoramento OTS/OTD. NF + placa → chegadas do Estadias. Utiliza a última versão de cada monitoramento na base selecionada.")
-    st.info("OTD 1 fica Sem informação até existir evidência de quando o agendamento foi realizado. Data emissão do CT-e não substitui Data Emissão NF. Limites sem horário são comparados por dia.")
+    st.info("OTS 2 e OTD 2 consideram dentro do prazo o mesmo dia ou depois do limite. OTD 3 usa a Agenda GFL quando está no mesmo dia da Data Limite e, quando a agenda é posterior, exige chegada na Data Limite. OTD 1 compara o registro com a emissão da NF.")
     bases = {}
     sources = {}
     for fonte in FONTES:
@@ -207,80 +230,38 @@ elif pagina == "Sincronização OTS e OTD":
 
 elif pagina == "Visão geral":
     bases = {}
-    for col, fonte in zip(st.columns(len(FONTES)), FONTES):
+    for fonte in FONTES:
         base = hist[hist.fonte == fonte]
         estado = ots_status(fonte=fonte)
         if estado:
             base = hist[hist.id == estado[0]]
         bases[fonte] = carregar(int(base.iloc[0].id)) if not base.empty else pd.DataFrame()
-        with col:
-            st.subheader(fonte)
-            st.metric("Registros na última importação", int(base.iloc[0].quantidade) if not base.empty else 0)
-            if base.empty:
-                st.info("Aguardando importação.")
-            else:
-                st.caption(f"Arquivo: {base.iloc[0].arquivo} • {base.iloc[0].criado_em}")
-    st.subheader("Agendamentos — Banco OTS e OTD")
-    st.caption("OTD: Data Limite no domingo permite agendamento até segunda-feira como OK. A vigência é definida pela Previsão de Carga.")
-    st.caption("Exceção OTD por chegada: agendamento atrasado passa a OK quando o rastreador comprova chegada no destino até o limite. Sem comprovação, o atraso é mantido. Usa o cruzamento do LCTE com Estadias por NF + placa; todas as NFs vinculadas ao monitoramento precisam atender à exceção.")
-    st.caption("Último registro por monitoramento. Comparação por dia, sem horário. Percentuais sobre OK + Antecipado + Atrasado; Sem informação fica fora do cálculo. O mês de vigência usa Previsão de Carga para OTS, OTD e análise manual, independentemente do filtro de emissão da NF abaixo.")
-    if bases[FONTES[0]].empty:
-        st.info("Sincronize OTS e OTD para exibir os cards de agendamentos.")
-    else:
-        try:
-            analysis_for_schedules = rules.analyze(bases[FONTES[2]], bases[FONTES[0]], bases[FONTES[1]]) if not bases[FONTES[2]].empty else None
-            queue = review_queue(bases[FONTES[0]], analysis_for_schedules, stays=bases[FONTES[1]])
-            schedules = rules.schedule_indicators(bases[FONTES[0]], analysis_for_schedules)
-            if not queue.empty:
-                approved_codes = queue.loc[queue["Dentro da regra"], "Monitoramento"]
-                schedules.loc[schedules.Monitoramento.isin(approved_codes), "OTD"] = "OK"
-            if "Mês OTS" not in schedules:
-                reload(rules)
-                schedules = rules.schedule_indicators(bases[FONTES[0]])
-            months = sorted(set(schedules["Mês OTS"]), reverse=True)
-            schedule_month = st.selectbox("Mês de vigência — Previsão de Carga", ["Todos", *months], key="schedule_month")
-            for name, description in [("OTS", "Agendamento Carga × Previsão Carga"), ("OTD", "Agenda GFL × Data Limite")]:
-                st.subheader(f"{name} — {description}")
-                selected = schedules if schedule_month == "Todos" else schedules.loc[schedules["Mês OTS"].eq(schedule_month)]
-                counts = selected[name].value_counts()
-                total = int(selected[name].ne(rules.UNKNOWN).sum())
-                cards = st.columns(5)
-                cards[0].metric("Total analisado", total)
-                for card, status in zip(cards[1:4], ["OK", "Antecipado", "Atrasado"]):
-                    count = int(counts.get(status, 0))
-                    card.metric(f"{name} {status}", count)
-                    card.caption(f"{count / total:.2%}" if total else "—")
-                cards[4].metric("Sem informação", int(counts.get(rules.UNKNOWN, 0)))
-            if "otd_review_saved" in st.session_state:
-                st.success(st.session_state.pop("otd_review_saved"))
-            render_reviews(queue, schedule_month, usuario)
-        except ValueError as exc:
-            st.error(str(exc))
-    st.subheader("Atendimento das regras de estadia")
+    st.subheader("Atendimento das regras OTS e OTD")
     if bases[FONTES[2]].empty:
         st.info("Sincronize Estadias para receber o LCTE e exibir os indicadores das cinco regras.")
     else:
         try:
             resultado = analyze(bases[FONTES[2]], bases[FONTES[0]], bases[FONTES[1]])
             meses = resultado["Emissão da NF"].map(rules.date).map(lambda d: d.strftime("%Y-%m") if pd.notna(d) else "Sem data")
-            mes = st.selectbox("Mês de emissão da NF", ["Todos", *sorted(meses.unique(), reverse=True)], key="overview_month")
+            mes = st.selectbox("Mês da análise", ["Todos", *sorted(meses.unique(), reverse=True)], key="overview_month")
+            resultado_completo = resultado.copy()
+            meses_comparativo = []
+            for periodo in sorted(meses.unique(), reverse=True):
+                periodo_resultado = resultado_completo.loc[meses.eq(periodo)]
+                periodo_table, _ = indicators(periodo_resultado)
+                meses_comparativo.append({
+                    "Mês": periodo,
+                    **{row["Regra"]: "—" if pd.isna(row["% Dentro"]) else f'{row["% Dentro"]:.2f}%'
+                       for row in periodo_table.to_dict("records")},
+                })
             if mes != "Todos":
                 resultado = resultado.loc[meses.eq(mes)]
             table, general = indicators(resultado)
-            summary = st.columns(3)
-            summary[0].metric("Viagens/NFs", general["Viagens/NFs"])
-            summary[1].metric("Regras analisadas", general["Regras analisadas"])
-            summary[2].metric("Atendimento geral", "—" if general["Conformidade %"] is None else f'{general["Conformidade %"]:.2f}%')
-            st.caption("Percentuais = Dentro ÷ (Dentro + Fora). Sem informação não entra no denominador. Viagens contadas por NF + placa única.")
             for col, row in zip(st.columns(len(rules.RULES)), table.to_dict("records")):
                 with col:
-                    st.subheader(row["Regra"])
-                    st.metric("Atendimento", "—" if pd.isna(row["% Dentro"]) else f'{row["% Dentro"]:.2f}%')
-                    st.metric("Total analisado", row["Total analisado"])
-                    st.metric("Dentro do prazo", row["Dentro do prazo"])
-                    st.metric("Fora do prazo", row["Fora do prazo"])
-                    st.metric("Sem informação", row["Sem informação"])
-            st.caption("Sem registros analisáveis, o percentual aparece como —. Os detalhes estão em Análise Performance.")
+                    col.metric(row["Regra"], "—" if pd.isna(row["% Dentro"]) else f'{row["% Dentro"]:.2f}%')
+            st.subheader("Resumo comparativo por mês")
+            st.dataframe(pd.DataFrame(meses_comparativo, columns=["Mês", *rules.RULES]), hide_index=True, use_container_width=True)
         except ValueError as exc:
             st.error(str(exc))
 
