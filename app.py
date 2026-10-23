@@ -89,6 +89,14 @@ if pagina == "Performance IPP":
             if ipp.empty:
                 st.info("Nenhum monitoramento analisável foi encontrado.")
             else:
+                meses_ipp = sorted(ipp["Mês OTS"].dropna().unique(), reverse=True)
+                mes_ipp = st.selectbox("Mês de vigência — Previsão de Carga", ["Todos", *meses_ipp], key="ipp_month")
+                if mes_ipp != "Todos":
+                    ipp = ipp.loc[ipp["Mês OTS"].eq(mes_ipp)].copy()
+                st.caption("O filtro usa a Previsão de Carga para OTS e OTD.")
+                if ipp.empty:
+                    st.info("Nenhum registro encontrado para o mês selecionado.")
+                    st.stop()
                 cards = st.columns(3)
                 total = int(ipp[["OTS", "OTD"]].isin(["OK", "Antecipado", "Atrasado"]).sum().sum())
                 for card, label, status in zip(cards, ["OK", "Atrasado", "Sem informação"], [["OK", "Antecipado"], ["Atrasado"], ["Sem informação"]]):
