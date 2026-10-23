@@ -97,11 +97,17 @@ if pagina == "Performance IPP":
                 if ipp.empty:
                     st.info("Nenhum registro encontrado para o mês selecionado.")
                     st.stop()
-                cards = st.columns(3)
-                total = int(ipp[["OTS", "OTD"]].isin(["OK", "Antecipado", "Atrasado"]).sum().sum())
-                for card, label, status in zip(cards, ["OK", "Atrasado", "Sem informação"], [["OK", "Antecipado"], ["Atrasado"], ["Sem informação"]]):
-                    quantidade = int(ipp[["OTS", "OTD"]].isin(status).sum().sum())
-                    card.metric(label, quantidade, f"{quantidade / total * 100:.2f}%" if total else None)
+                cards = st.columns(5)
+                ots_total = int(ipp.OTS.isin(["OK", "Antecipado", "Atrasado"]).sum())
+                otd_total = int(ipp.OTD.isin(["OK", "Antecipado", "Atrasado"]).sum())
+                for card, label, quantidade, base in [
+                    (cards[0], "OTS 1 atendida", len(ipp), len(ipp)),
+                    (cards[1], "OTS atendida", int(ipp.OTS.isin(["OK", "Antecipado"]).sum()), ots_total),
+                    (cards[2], "OTS não atendida", int(ipp.OTS.eq("Atrasado").sum()), ots_total),
+                    (cards[3], "OTD atendida", int(ipp.OTD.isin(["OK", "Antecipado"]).sum()), otd_total),
+                    (cards[4], "OTD não atendida", int(ipp.OTD.eq("Atrasado").sum()), otd_total),
+                ]:
+                    card.metric(label, quantidade, f"{quantidade / base * 100:.2f}%" if base else None)
                 resumo = pd.DataFrame({"Indicador": ["OTS", "OTD"], "OK (inclui antecipado)": [int(ipp.OTS.isin(["OK", "Antecipado"]).sum()), int(ipp.OTD.isin(["OK", "Antecipado"]).sum())], "Atrasado": [int(ipp.OTS.eq("Atrasado").sum()), int(ipp.OTD.eq("Atrasado").sum())], "Sem informação": [int(ipp.OTS.eq("Sem informação").sum()), int(ipp.OTD.eq("Sem informação").sum())]})
                 st.dataframe(resumo, hide_index=True, use_container_width=True)
                 st.download_button("Exportar Performance IPP", exportar(ipp), "performance_ipp.xlsx")
