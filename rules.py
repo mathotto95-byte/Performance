@@ -84,8 +84,10 @@ def compare_not_early(actual, deadline):
 
 def compare_otd3(arrival, agenda, deadline):
     agenda_date, deadline_date = date(agenda), date(deadline)
-    if pd.isna(agenda_date) or pd.isna(deadline_date):
-        return UNKNOWN, "Agenda GFL ou Data Limite ausente ou inválida"
+    if pd.isna(deadline_date):
+        return UNKNOWN, "Data Limite ausente ou inválida"
+    if pd.isna(agenda_date):
+        return compare_destination_day(arrival, deadline)
     agenda_date = agenda_date.tz_convert("America/Sao_Paulo") if agenda_date.tzinfo else agenda_date
     deadline_date = deadline_date.tz_convert("America/Sao_Paulo") if deadline_date.tzinfo else deadline_date
     if agenda_date.date() == deadline_date.date():
