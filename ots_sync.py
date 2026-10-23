@@ -19,6 +19,33 @@ COLUMNS = {
     "data_hora_registro": "Data/Hora do Registro", "usuario_registro": "Usuario",
     "registro_origem_id": "ID do Registro Anterior", "dados_alterados": "Dados Alterados",
 }
+DATE_COLUMNS = ("Previsao Carga", "Data Limite", "Agendamento Carga", "Agenda GFL", "Data/Hora do Registro")
+
+
+def normalize_ots_otd_dates(df):
+    result = df.copy()
+    invalid = []
+    for col in DATE_COLUMNS:
+        if col not in result:
+            continue
+        values = []
+        for value in result[col]:
+            if value is None or (isinstance(value, float) and pd.isna(value)) or str(value).strip() == "":
+                values.append("")
+                continue
+            raw = str(value).strip()
+            parsed = pd.to_datetime(value, dayfirst=not raw[:4].isdigit(), errors="coerce")
+            if pd.isna(parsed) or " - " in raw:
+                invalid.append(f"{col}: {raw}")
+                values.append(raw)
+                continue
+            has_time = bool(getattr(parsed, "hour", 0) or getattr(parsed, "minute", 0) or getattr(parsed, "second", 0) or ":" in raw)
+            values.append(parsed.strftime("%d/%m/%Y %H:%M" if has_time else "%d/%m/%Y"))
+        result[col] = values
+    if invalid:
+        examples = "; ".join(invalid[:5])
+        raise ValueError(f"Datas do OTS/OTD inválidas ou não padronizáveis: {examples}")
+    return result
 
 
 def settings():
@@ -49,14 +76,7 @@ def parse_payload(payload):
         raise ValueError("O backup contém IDs ausentes ou duplicados.")
     df = df.sort_values(["data_hora_registro", "id"], ascending=False, kind="stable").reset_index(drop=True)
     view = df[list(COLUMNS)].rename(columns=COLUMNS)
-    for col, fmt in [("Previsao Carga", "%d/%m/%Y"), ("Data Limite", "%d/%m/%Y"), ("Data/Hora do Registro", "%d/%m/%Y %H:%M")]:
-        def format_value(value):
-            if value is None or value == "":
-                return ""
-            parsed = pd.to_datetime(value, errors="coerce")
-            return str(value) if pd.isna(parsed) else parsed.strftime(fmt)
-        view[col] = view[col].map(format_value)
-    return view
+    return normalize_ots_otd_dates(view)
 
 
 def download_payload(token, branch="main", repository=REPOSITORY, backup_path=BACKUP_PATH):

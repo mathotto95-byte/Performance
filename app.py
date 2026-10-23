@@ -18,7 +18,7 @@ if not hasattr(rules, "indicators") or not hasattr(rules, "MANUAL_OTD_SUPPORTED"
 if not hasattr(ots_sync, "_save_snapshot"):
     reload(ots_sync)
 
-from ots_sync import settings as ots_settings, sync as sync_ots, status as ots_status
+from ots_sync import settings as ots_settings, sync as sync_ots, status as ots_status, normalize_ots_otd_dates
 from rules import prepare_lcte, indicators, schedule_indicators
 import reporting
 if "Previsão de Carga" not in reporting.PANEL_COLUMNS:
@@ -303,6 +303,8 @@ elif pagina == "Importações":
             aba = st.selectbox("Aba com os resultados", abas, index=abas.index(preferida))
             linha = st.number_input("Linha do cabeçalho", min_value=1, max_value=100, value=1)
             df = ler_planilha(content, aba, int(linha))
+            if fonte == FONTES[0]:
+                df = normalize_ots_otd_dates(df)
             st.write(f"{len(df):,} registros • {len(df.columns)} colunas")
             st.dataframe(df.head(100), hide_index=True, use_container_width=True)
             st.caption("Prévia dos primeiros 100 registros. Confira a fonte, a aba e as colunas antes de importar.")
