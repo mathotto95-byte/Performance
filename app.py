@@ -97,6 +97,13 @@ if pagina == "Performance IPP":
                 if ipp.empty:
                     st.info("Nenhum registro encontrado para o mês selecionado.")
                     st.stop()
+                atendida = ipp.OTS.isin(["OK", "Antecipado"]) & ipp.OTD.isin(["OK", "Antecipado"])
+                fora = ipp.OTS.eq("Atrasado") | ipp.OTD.eq("Atrasado")
+                resumo_cards = st.columns(4)
+                resumo_cards[0].metric("Total de itens", len(ipp))
+                resumo_cards[1].metric("Dentro da regra", int(atendida.sum()))
+                resumo_cards[2].metric("Fora da regra", int(fora.sum()))
+                resumo_cards[3].metric("Sem informação", int((~atendida & ~fora).sum()))
                 cards = st.columns(5)
                 ots_total = int(ipp.OTS.isin(["OK", "Antecipado", "Atrasado"]).sum())
                 otd_total = int(ipp.OTD.isin(["OK", "Antecipado", "Atrasado"]).sum())
